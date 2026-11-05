@@ -46,8 +46,16 @@ internal object RuntimeApplicationContext {
         android.content.ContentResolver::class.java.getDeclaredField("mPackageName")
             .apply { isAccessible = true }.set(context.contentResolver, "com.android.shell")
         com.droidance.core.device.agent.device.RuntimeContentProviders.acquire("settings")
+        // HyperOS 4 on Xiaomi Android 17 recursively re-enters Typeface.create
+        // when app_process explicitly installs the system font map. Keep the
+        // standard bootstrap on other devices without changing system settings.
+        val skipVendorFontMap = Build.VERSION.SDK_INT >= 37 &&
+            Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true)
+        if (skipVendorFontMap) {
+            android.util.Log.w("DroidanceRuntime", "Skipping font-map bootstrap on Xiaomi Android 17")
+        }
         // app_process does not receive ActivityThread.bindApplication's font initialization.
-        if (Build.VERSION.SDK_INT >= 31) {
+        if (Build.VERSION.SDK_INT >= 31 && !skipVendorFontMap) {
             val manager = requireNotNull(shell.getSystemService("font"))
             val config = manager.javaClass.getMethod("getFontConfig").invoke(manager)
             val systemFonts = Class.forName("android.graphics.fonts.SystemFonts")
@@ -66,8 +74,15 @@ internal object RuntimeApplicationContext {
             .apply { isAccessible = true }.set(null, windows)
         threadClass.getDeclaredField("mInstrumentation").apply { isAccessible = true }
             .set(thread, android.app.Instrumentation())
-        Class.forName("android.security.net.config.NetworkSecurityConfigProvider")
-            .getMethod("install", Context::class.java).invoke(null, context)
+        // ActivityThread.systemMain may already install AndroidNSSP in this
+        // standalone shell process. Reinstalling the same provider returns -1.
+        val existingSecurityProvider = java.security.Security.getProviders().firstOrNull()?.name
+        if (skipVendorFontMap && existingSecurityProvider == "AndroidNSSP") {
+            android.util.Log.i("DroidanceRuntime", "Using existing Android network security provider")
+        } else {
+            Class.forName("android.security.net.config.NetworkSecurityConfigProvider")
+                .getMethod("install", Context::class.java).invoke(null, context)
+        }
         val application = com.droidance.DroidanceApp()
         Application::class.java.getDeclaredMethod("attach", Context::class.java)
             .apply { isAccessible = true }.invoke(application, context)
