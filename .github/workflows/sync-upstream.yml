@@ -1,0 +1,44 @@
+name: Sync upstream main
+
+on:
+  schedule:
+    - cron: "13,28,43,58 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream-main
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Merge upstream into fork main
+    runs-on: ubuntu-latest
+    if: github.repository == 'tuutoo/Droidance'
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Merge upstream main safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/ybblab/Droidance.git
+          git fetch upstream main --no-tags
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork main already contains upstream main."
+            exit 0
+          fi
+
+          git merge --no-edit upstream/main
+          git push origin HEAD:main
