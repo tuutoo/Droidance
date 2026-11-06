@@ -294,7 +294,7 @@ class VirtualSpaceSidecarBridge @Inject constructor(
 
     /** Debug-export evidence of why the sidecar last stopped; needs either live shell channel. */
     fun readSidecarEvidence(): String = runCatching {
-        val command = ResidentSidecarProcessCommands.evidenceCommand()
+        val command = ResidentSidecarProcessCommands.evidenceCommand(sidecarStorageDirectory())
         val result = when {
             isResidentBinderAlive() -> execShellCommand(command, RuntimeMode.STANDARD, timeoutMs = EVIDENCE_TIMEOUT_MS)
             adbShell.isAvailable() -> adbShell.exec(command, EVIDENCE_TIMEOUT_MS)
@@ -1895,6 +1895,12 @@ class VirtualSpaceSidecarBridge @Inject constructor(
             IVirtualSpaceSidecar.Stub.asInterface(binder)
         }.getOrNull()
 
+    /** Resident files live in the application's external files directory, removed with its data. */
+    private fun sidecarStorageDirectory(): String = ResidentSidecarProcessCommands.requireStorageDirectory(
+        requireNotNull(context.getExternalFilesDir(null)) { "Application storage is unavailable" }.absolutePath,
+        context.packageName
+    )
+
     private fun buildAppProcessCommand(
         width: Int,
         height: Int,
@@ -1908,6 +1914,7 @@ class VirtualSpaceSidecarBridge @Inject constructor(
             densityDpi = densityDpi,
             packageName = context.packageName,
             protocolVersion = SIDECAR_PROTOCOL_VERSION,
+            storageDirectory = sidecarStorageDirectory(),
             stopWhenDeveloperOptionsDisabled = !rootConnection.useRoot,
             escape = adbShell::escapeForShell
         )
@@ -1916,11 +1923,12 @@ class VirtualSpaceSidecarBridge @Inject constructor(
     /** 诊断用：把 sidecar 进程存活、setsid/nohup 可用性、日志文件状态、日志内容一起读回来，定位 binder timeout 真因。 */
     private fun readSidecarLog(): String =
         runCatching {
+            val log = ResidentSidecarProcessCommands.logPath(sidecarStorageDirectory())
             val probe = "echo SERVICE=$sidecarServiceName TAG=$sidecarLogTag; " +
                 "echo PROC=[\$(pgrep -f VirtualSpaceSidecarMain | tr '\\n' ' ')]; " +
                 "echo SETSID=[\$(command -v setsid || echo none)] NOHUP=[\$(command -v nohup || echo none)]; " +
-                "echo LOGSTAT=[\$(ls -la /data/local/tmp/droidance_vspace.log 2>&1)]; " +
-                "echo ---LOG---; cat /data/local/tmp/droidance_vspace.log 2>/dev/null | tail -25"
+                "echo LOGSTAT=[\$(ls -la $log 2>&1)]; " +
+                "echo ---LOG---; cat $log 2>/dev/null | tail -25"
             val out = if (shellRunner.isAvailable(ShellIdentity.SHELL)) {
                 shellRunner.shell(probe, 4_000L)
             } else {

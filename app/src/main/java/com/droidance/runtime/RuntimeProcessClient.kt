@@ -139,6 +139,9 @@ class RuntimeProcessClient @Inject constructor(
         check(controls.trySend(operation to Bundle(arguments)).isSuccess)
     }
 
+    /** Sends arguments that carry file descriptors directly; [command] serializes plain values only. */
+    fun transfer(operation: String, arguments: Bundle): Bundle = decode(owner().command(operation, arguments))
+
     fun command(operation: String, arguments: Bundle = Bundle()): Bundle {
         val descriptor = RuntimeWire.write(cacheDir, arguments)
         return try { decode(owner().command(operation, Bundle().apply { putParcelable("payload", descriptor) })) }

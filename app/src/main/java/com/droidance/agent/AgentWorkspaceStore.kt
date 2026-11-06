@@ -36,16 +36,22 @@ class AgentWorkspaceStore @Inject constructor(
         return soul.takeUnless { it == defaultSoul.trim() }.orEmpty()
     }
 
+    /** Stores only a persona that differs from the built-in default, so default updates reach every user. */
     fun writeSoul(content: String, agentName: String = DEFAULT_AGENT) {
         val path = soulPath(agentName)
+        if (content.trim() == defaultSoul()) {
+            if (fileManager.exists(path)) check(fileManager.deleteFile(path)) { "Cannot reset the persona" }
+            soulCache = null
+            return
+        }
         fileManager.writeFile(path, content)
         soulCache = agentName to FileCacheEntry(fileManager.lastModified(path), content)
     }
 
     fun initializeAgent(agentName: String) {
-        if (!fileManager.exists(soulPath(agentName))) {
-            fileManager.writeFile(soulPath(agentName), defaultSoul())
-        }
+        // Earlier builds wrote the default persona as a file; an unchanged copy would pin that default.
+        val path = soulPath(agentName)
+        if (fileManager.readFile(path)?.trim() == defaultSoul()) check(fileManager.deleteFile(path)) { "Cannot reset the persona" }
         longTermMemoryStore.initializeIfMissing(agentName)
     }
 

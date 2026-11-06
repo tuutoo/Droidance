@@ -52,6 +52,14 @@ fun ProviderListScreen(
     viewModel: ProviderListViewModel = hiltViewModel()
 ) {
     val providers by viewModel.providers.collectAsStateWithLifecycle()
+    // Items are keyed, so a provider moving to the top would leave the list anchored lower down.
+    val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+    val firstId = providers.firstOrNull()?.representative?.id
+    var shownFirstId by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(firstId) }
+    LaunchedEffect(firstId) {
+        if (firstId != null && firstId != shownFirstId) listState.scrollToItem(0)
+        shownFirstId = firstId
+    }
 
     val lifecycleState by androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle.currentStateFlow.collectAsStateWithLifecycle()
     LaunchedEffect(lifecycleState) {
@@ -126,6 +134,7 @@ fun ProviderListScreen(
             }
         } else {
             LazyColumn(
+                state = listState,
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues),

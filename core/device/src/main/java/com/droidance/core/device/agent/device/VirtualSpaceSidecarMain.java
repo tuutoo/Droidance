@@ -32,10 +32,13 @@ public final class VirtualSpaceSidecarMain {
     private static final int STALE_PROCESS_EXIT_RETRIES = 20;
     private static final long SCREEN_OFF_APP_PROBE_MS = 2000L;
     private static final long SCREEN_STATE_POLL_MS = 1000L;
+    private static final int PACKAGE_PROBE_TICKS = 5;
     private static final int RESTARTABLE_FAILURE_EXIT_CODE = 1;
     private static final int SCREEN_OFF = 0;
     private static final int SCREEN_LOCKED = 1;
     private static final int SCREEN_UNLOCKED = 2;
+    private static final String LEGACY_SHARED_DIRECTORY = "/data/local/tmp/";
+    private static String storageDirectory;
     private static java.io.RandomAccessFile leaseFile;
     private static java.nio.channels.FileLock leaseLock;
     private static Object windowManager;
@@ -47,6 +50,7 @@ public final class VirtualSpaceSidecarMain {
     public static void main(String[] args) {
         try {
             ensureSupportedIdentity();
+            String requestedStorage = System.getenv("DROIDANCE_SIDECAR_STORAGE");
             writeLog("INFO main entered, uid=" + Process.myUid() + " args=" + args.length, null);
             String codeSource = System.getProperty("java.class.path", "");
             if (args.length != 6 || parseProtocolVersion(args) != VirtualSpaceSidecarService.SIDECAR_PROTOCOL_VERSION
@@ -62,11 +66,19 @@ public final class VirtualSpaceSidecarMain {
                 reportFailure("invalid sidecar package", null);
                 return;
             }
+            try {
+                storageDirectory = ResidentSidecarProcessCommands.INSTANCE
+                        .requireStorageDirectory(requestedStorage == null ? "" : requestedStorage, targetPackage);
+            } catch (IllegalArgumentException e) {
+                reportFailure("invalid sidecar storage directory", e);
+                return;
+            }
+            // Retire sidecars of other builds first: a previous build may hold a lease at another path.
+            int protocolVersion = parseProtocolVersion(args);
+            java.util.List<Integer> stalePids = replaceStaleSidecarProcesses(
+                    targetPackage, protocolVersion, codeSource
+            );
             if (!acquireProcessLease(targetPackage)) {
-                int protocolVersion = parseProtocolVersion(args);
-                java.util.List<Integer> stalePids = replaceStaleSidecarProcesses(
-                        targetPackage, protocolVersion, codeSource
-                );
                 if (!stalePids.isEmpty() && acquireProcessLeaseWithRetry(targetPackage)) {
                     reportInfo(
                             "replaced stale sidecar pids=" + stalePids +
@@ -78,6 +90,7 @@ public final class VirtualSpaceSidecarMain {
                     return;
                 }
             }
+            removeLegacySharedFiles(targetPackage);
             Looper.prepareMainLooper();
             writeLog("INFO looper prepared", null);
             Context sidecarContext = SidecarShellContext.create();
@@ -122,9 +135,17 @@ public final class VirtualSpaceSidecarMain {
         Handler handler = new Handler(Looper.getMainLooper());
         handler.post(new Runnable() {
             private int observed = readScreenState(power);
+            private int ticks;
 
             @Override
             public void run() {
+                // An upgrade keeps the package installed, so a stale sidecar can still hand over
+                // to its replacement; once the package is gone this process has no owner left.
+                if (++ticks % PACKAGE_PROBE_TICKS == 0 && !isPackageInstalled(context, targetPackage)) {
+                    reportInfo("sidecar package uninstalled");
+                    System.exit(0);
+                    return;
+                }
                 try {
                     int current = readScreenState(power);
                     if (current != observed) {
@@ -144,6 +165,18 @@ public final class VirtualSpaceSidecarMain {
             }
         });
         writeLog("INFO screen lifecycle polling started", null);
+    }
+
+    private static boolean isPackageInstalled(Context context, String targetPackage) {
+        try {
+            context.getPackageManager().getApplicationInfo(targetPackage, 0);
+            return true;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return false;
+        } catch (Throwable t) {
+            writeLog("WARN package probe failed: " + safeMessage(t), null);
+            return true;
+        }
     }
 
     private static int readScreenState(PowerManager power) {
@@ -190,10 +223,10 @@ public final class VirtualSpaceSidecarMain {
      * job or app-specific process lookup is needed.
      */
     private static boolean acquireProcessLease(String targetPackage) {
-        String role = "virtual_" + targetPackage;
-        String path = "/data/local/tmp/droidance_vspace_" + Process.myUid() + "_" + role + ".lock";
         try {
-            leaseFile = new java.io.RandomAccessFile(path, "rw");
+            java.io.File directory = new java.io.File(storageDirectory, "sidecar");
+            if (!directory.isDirectory() && !directory.mkdirs()) throw new java.io.IOException("lease directory unavailable");
+            leaseFile = new java.io.RandomAccessFile(new java.io.File(directory, "lease.lock"), "rw");
             leaseLock = leaseFile.getChannel().tryLock();
             if (leaseLock != null) return true;
             leaseFile.close();
@@ -207,6 +240,25 @@ public final class VirtualSpaceSidecarMain {
             reportFailure("sidecar process lease unavailable: " + safeMessage(t), t);
             return false;
         }
+    }
+
+    /** Files earlier builds kept in the shared shell directory, which an uninstall never removes. */
+    private static void removeLegacySharedFiles(String targetPackage) {
+        String[] names = {
+                "droidance_vspace_" + SHELL_UID + "_virtual_" + targetPackage + ".lock",
+                "droidance_vspace_" + SHELL_UID + "_virtual.lock",
+                "droidance_vspace.log",
+                "droidance_vspace.log.1"
+        };
+        for (String name : names) {
+            java.io.File file = new java.io.File(LEGACY_SHARED_DIRECTORY, name);
+            if (file.exists() && !file.delete()) writeLog("WARN legacy sidecar file not removed: " + name, null);
+        }
+    }
+
+    static String storageDirectory() {
+        if (storageDirectory == null) throw new IllegalStateException("sidecar storage directory unavailable");
+        return storageDirectory;
     }
 
     /**
@@ -446,8 +498,13 @@ public final class VirtualSpaceSidecarMain {
     private static synchronized void writeLog(String line, Throwable t) {
         try {
             if (logWriter == null) {
+                // Before the storage directory is validated, lines go to logcat only.
+                if (storageDirectory == null) {
+                    Log.i(TAG, line, t);
+                    return;
+                }
                 logWriter = new java.io.PrintWriter(
-                    new java.io.FileWriter("/data/local/tmp/droidance_vspace.log", true), true);
+                    new java.io.FileWriter(ResidentSidecarProcessCommands.INSTANCE.logPath(storageDirectory), true), true);
             }
             logWriter.println(System.currentTimeMillis() + " " + line);
             if (t != null) t.printStackTrace(logWriter);

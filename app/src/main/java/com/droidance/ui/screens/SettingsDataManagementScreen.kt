@@ -5,12 +5,19 @@ package com.droidance.ui.screens
 
 import com.droidance.ui.components.DroidanceSnackbar
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,8 +38,21 @@ fun SettingsDataManagementScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val total = uiState.totalPromptTokens + uiState.totalCompletionTokens
     var pendingClear by remember { mutableStateOf<String?>(null) }
-    var pendingExport by remember { mutableStateOf(false) }
+    var pendingBackup by remember { mutableStateOf(false) }
+    var pendingDiagnostics by remember { mutableStateOf(false) }
+    var restoreSource by remember { mutableStateOf<android.net.Uri?>(null) }
+    var backupPassword by remember { mutableStateOf("") }
     val snackbarHostState = remember { SnackbarHostState() }
+    val dataBusy = uiState.debugExporting || uiState.dataClearing != null || uiState.backupOperation != null
+
+    val backupTarget = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
+        val password = backupPassword
+        backupPassword = ""
+        if (uri != null) viewModel.exportBackup(uri, password)
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        restoreSource = uri
+    }
 
     LaunchedEffect(uiState.dataActionMessage) {
         val message = uiState.dataActionMessage.takeIf { it.isNotBlank() } ?: return@LaunchedEffect
@@ -40,18 +60,49 @@ fun SettingsDataManagementScreen(
         viewModel.consumeDataActionMessage()
     }
 
-    if (pendingExport) {
-        com.droidance.ui.components.GlassAlertDialog(
-            onDismissRequest = { pendingExport = false },
-            title = stringResource(R.string.settings_export_debug_title),
-            text = stringResource(R.string.settings_export_debug_message),
-            confirmLabel = stringResource(R.string.settings_export_share),
-            onConfirm = {
-                pendingExport = false
-                viewModel.exportDebugPackage()
-            },
-            dismissLabel = stringResource(R.string.common_cancel),
-            onDismiss = { pendingExport = false }
+    if (pendingBackup) {
+        BackupPasswordDialog(
+            onDismiss = { pendingBackup = false },
+            onConfirm = { password ->
+                pendingBackup = false
+                backupPassword = password
+                val stamp = java.text.SimpleDateFormat("yyyyMMdd-HHmm", java.util.Locale.US).format(java.util.Date())
+                backupTarget.launch("Droidance-backup-$stamp.droidance")
+            }
+        )
+    }
+
+    restoreSource?.let { source ->
+        RestorePasswordDialog(
+            onDismiss = { restoreSource = null },
+            onConfirm = { password ->
+                restoreSource = null
+                viewModel.restoreBackup(source, password)
+            }
+        )
+    }
+
+    if (pendingDiagnostics) {
+        DiagnosticsDialog(
+            onDismiss = { pendingDiagnostics = false },
+            onConfirm = { includeTaskContent ->
+                pendingDiagnostics = false
+                viewModel.exportDiagnostics(includeTaskContent)
+            }
+        )
+    }
+
+    uiState.dataResult?.let { result ->
+        val contents = result.contents
+        val restored = result.operation == com.droidance.ui.viewmodel.BackupOperation.RESTORE
+        val counts = arrayOf(contents.conversations, contents.attachments, contents.skills, contents.memoryFiles, contents.settings)
+        com.droidance.ui.components.DroidanceDialog(
+            onDismissRequest = { if (!restored) viewModel.consumeDataResult() },
+            title = stringResource(if (restored) R.string.settings_restore_done_title else R.string.settings_backup_done_title),
+            text = stringResource(if (restored) R.string.settings_restore_done_message else R.string.settings_backup_done_message, *counts),
+            confirmLabel = stringResource(if (restored) R.string.settings_restart else R.string.common_close),
+            onConfirm = { if (restored) viewModel.restartAfterRestore() else viewModel.consumeDataResult() },
+            dismissEnabled = !restored
         )
     }
 
@@ -192,19 +243,37 @@ fun SettingsDataManagementScreen(
             item {
                 SettingsCardGroup {
                     SettingsActionItem(
-                        title = stringResource(R.string.settings_export_debug_package),
-                        subtitle = stringResource(R.string.settings_export_debug_detail),
+                        title = stringResource(R.string.settings_backup_data),
+                        subtitle = stringResource(R.string.settings_backup_data_detail),
                         actionText = stringResource(R.string.settings_export_action),
-                        enabled = !uiState.debugExporting && uiState.dataClearing == null,
+                        enabled = !dataBusy,
+                        loading = uiState.backupOperation == com.droidance.ui.viewmodel.BackupOperation.EXPORT,
+                        onClick = { pendingBackup = true }
+                    )
+                    SettingsInsetDivider()
+                    SettingsActionItem(
+                        title = stringResource(R.string.settings_restore_data),
+                        subtitle = stringResource(R.string.settings_restore_data_detail),
+                        actionText = stringResource(R.string.settings_import_action),
+                        enabled = !dataBusy,
+                        loading = uiState.backupOperation == com.droidance.ui.viewmodel.BackupOperation.RESTORE,
+                        onClick = { restorePicker.launch(arrayOf("*/*")) }
+                    )
+                    SettingsInsetDivider()
+                    SettingsActionItem(
+                        title = stringResource(R.string.settings_export_diagnostics),
+                        subtitle = stringResource(R.string.settings_export_diagnostics_detail),
+                        actionText = stringResource(R.string.settings_export_action),
+                        enabled = !dataBusy,
                         loading = uiState.debugExporting,
-                        onClick = { pendingExport = true }
+                        onClick = { pendingDiagnostics = true }
                     )
                     SettingsInsetDivider()
                     SettingsActionItem(
                         title = stringResource(R.string.settings_clear_logs),
                         subtitle = stringResource(R.string.settings_clear_logs_detail),
                         actionText = stringResource(R.string.settings_clear_confirm),
-                        enabled = !uiState.debugExporting && uiState.dataClearing == null,
+                        enabled = !dataBusy,
                         loading = uiState.dataClearing == com.droidance.ui.viewmodel.DataClearTarget.LOGS,
                         onClick = { pendingClear = "logs" }
                     )
@@ -213,7 +282,7 @@ fun SettingsDataManagementScreen(
                         title = stringResource(R.string.settings_clear_conversations),
                         subtitle = stringResource(R.string.settings_clear_conversations_detail),
                         actionText = stringResource(R.string.settings_clear_confirm),
-                        enabled = !uiState.debugExporting && uiState.dataClearing == null,
+                        enabled = !dataBusy,
                         loading = uiState.dataClearing == com.droidance.ui.viewmodel.DataClearTarget.CONVERSATIONS,
                         onClick = { pendingClear = "conversations" }
                     )
@@ -256,4 +325,104 @@ private fun UsageValueItem(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
+}
+
+private const val MIN_BACKUP_PASSWORD = 6
+
+@Composable
+private fun BackupPasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    var confirmation by remember { mutableStateOf("") }
+    val tooShort = password.isNotEmpty() && password.length < MIN_BACKUP_PASSWORD
+    val mismatch = confirmation.isNotEmpty() && confirmation != password
+    com.droidance.ui.components.DroidanceDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.settings_backup_title),
+        text = stringResource(R.string.settings_backup_message),
+        confirmLabel = stringResource(R.string.settings_backup_choose_location),
+        onConfirm = { onConfirm(password) },
+        confirmEnabled = password.length >= MIN_BACKUP_PASSWORD && password == confirmation,
+        dismissLabel = stringResource(R.string.common_cancel),
+        onDismiss = onDismiss
+    ) {
+        PasswordField(password, { password = it }, R.string.settings_backup_password,
+            R.string.settings_backup_password_short.takeIf { tooShort })
+        PasswordField(confirmation, { confirmation = it }, R.string.settings_backup_password_confirm,
+            R.string.settings_backup_password_mismatch.takeIf { mismatch })
+    }
+}
+
+@Composable
+private fun RestorePasswordDialog(onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
+    var password by remember { mutableStateOf("") }
+    com.droidance.ui.components.DroidanceDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.settings_restore_title),
+        text = stringResource(R.string.settings_restore_message),
+        confirmLabel = stringResource(R.string.settings_restore_confirm),
+        onConfirm = { onConfirm(password) },
+        confirmEnabled = password.isNotEmpty(),
+        destructive = true,
+        dismissLabel = stringResource(R.string.common_cancel),
+        onDismiss = onDismiss
+    ) {
+        PasswordField(password, { password = it }, R.string.settings_backup_password, null)
+    }
+}
+
+@Composable
+private fun DiagnosticsDialog(onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {
+    var includeTaskContent by remember { mutableStateOf(false) }
+    com.droidance.ui.components.DroidanceDialog(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.settings_diagnostics_title),
+        text = stringResource(R.string.settings_diagnostics_message),
+        confirmLabel = stringResource(R.string.settings_export_share),
+        onConfirm = { onConfirm(includeTaskContent) },
+        dismissLabel = stringResource(R.string.common_cancel),
+        onDismiss = onDismiss
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().toggleable(
+                value = includeTaskContent,
+                role = androidx.compose.ui.semantics.Role.Switch,
+                onValueChange = { includeTaskContent = it }
+            ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(stringResource(R.string.settings_diagnostics_include_content), style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    stringResource(R.string.settings_diagnostics_include_content_detail),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Switch(
+                checked = includeTaskContent,
+                onCheckedChange = null,
+                modifier = Modifier.scale(SETTINGS_SWITCH_SCALE),
+                colors = com.droidance.ui.components.droidanceSwitchColors()
+            )
+        }
+    }
+}
+
+@Composable
+private fun PasswordField(value: String, onValueChange: (String) -> Unit,
+                          @androidx.annotation.StringRes label: Int, @androidx.annotation.StringRes error: Int?) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        label = { Text(stringResource(label)) },
+        singleLine = true,
+        isError = error != null,
+        supportingText = error?.let { { Text(stringResource(it)) } },
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        colors = com.droidance.ui.components.droidanceFieldColors(),
+        shape = com.droidance.ui.theme.AppShapes.Control,
+        modifier = Modifier.fillMaxWidth()
+    )
 }

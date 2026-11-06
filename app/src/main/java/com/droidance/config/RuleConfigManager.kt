@@ -81,8 +81,41 @@ class RuleConfigManager @Inject constructor(
 
     private val documentCache = java.util.concurrent.ConcurrentHashMap<String, String>()
 
+    /** Set when user overrides fail validation against the installed rules; they stay on disk unused. */
+    @Volatile
+    private var overridesSuspended = false
+
     fun initialize() {
-        // 配置错误必须在启动阶段直接暴露，不能以 Kotlin 默认值继续运行。
+        // 内置配置错误必须在启动阶段直接暴露；用户 override 与新版本不兼容时停用 override，回到内置规则。
+        withOverrideFallback { validate() }
+        fileManager.writeFile(VERSION_FILE, BUILTIN_VERSION)
+    }
+
+    /**
+     * Rules may be read before [initialize] (while the dependency graph is built). Any read that
+     * fails while user overrides exist suspends all overrides and retries with built-in rules only;
+     * a failure of the built-in rules themselves still surfaces.
+     */
+    private fun <T> withOverrideFallback(read: () -> T): T = try {
+        read()
+    } catch (error: Exception) {
+        if (!suspendOverrides(error)) throw error
+        read()
+    }
+
+    @Synchronized
+    private fun suspendOverrides(error: Exception): Boolean {
+        if (overridesSuspended || fileManager.listFiles(OVERRIDE_DIR).isEmpty()) return false
+        android.util.Log.w("RuleConfig", "Rule overrides are incompatible with the installed rules; using built-in rules", error)
+        overridesSuspended = true
+        harnessPolicyCache = null
+        harnessPromptPolicyCache = null
+        toolContractsCache = null
+        documentCache.clear()
+        return true
+    }
+
+    private fun validate() {
         harnessPolicy()
         harnessPrompts()
         publicFallbackDocument()
@@ -106,12 +139,14 @@ class RuleConfigManager @Inject constructor(
             readMarkdownSection("agent_core.md", "reasoning_control_policy")
         ).validate()
         require(readMarkdownSection("model_context.md", "recent_tool_feedback_limit").trim().toInt() > 0)
-        fileManager.writeFile(VERSION_FILE, BUILTIN_VERSION)
     }
+
+    private fun readOverride(fileName: String): String? =
+        if (overridesSuspended) null else fileManager.readFile("$OVERRIDE_DIR/$fileName")
 
     fun harnessPolicy(): HarnessPolicy {
         harnessPolicyCache?.let { return it }
-        return synchronized(this) {
+        return withOverrideFallback { synchronized(this) {
             harnessPolicyCache ?: loadYaml(
                 fileName = HARNESS_POLICY_FILE,
                 deserializer = HarnessPolicy.serializer()
@@ -119,12 +154,12 @@ class RuleConfigManager @Inject constructor(
                 it.validate()
                 harnessPolicyCache = it
             }
-        }
+        } }
     }
 
     fun toolContracts(): ToolContractsDocument {
         toolContractsCache?.let { return it }
-        return synchronized(this) {
+        return withOverrideFallback { synchronized(this) {
             toolContractsCache ?: loadYaml(
                 fileName = TOOL_CONTRACTS_FILE,
                 deserializer = ToolContractsDocument.serializer()
@@ -132,12 +167,12 @@ class RuleConfigManager @Inject constructor(
                 it.validate()
                 toolContractsCache = it
             }
-        }
+        } }
     }
 
     fun harnessPrompts(): HarnessPromptPolicy {
         harnessPromptPolicyCache?.let { return it }
-        return synchronized(this) {
+        return withOverrideFallback { synchronized(this) {
             harnessPromptPolicyCache ?: loadYaml(
                 fileName = HARNESS_PROMPTS_FILE,
                 deserializer = HarnessPromptPolicy.serializer()
@@ -145,7 +180,7 @@ class RuleConfigManager @Inject constructor(
                 it.validate()
                 harnessPromptPolicyCache = it
             }
-        }
+        } }
     }
 
     fun message(key: String): String =
@@ -181,7 +216,7 @@ class RuleConfigManager @Inject constructor(
         require(fileName.matches(SAFE_FILE_NAME)) { "Invalid rule file name: $fileName" }
         return documentCache[fileName] ?: synchronized(documentCache) {
             documentCache[fileName] ?: (
-                fileManager.readFile("$OVERRIDE_DIR/$fileName")
+                readOverride(fileName)
                     ?: readAsset("$ASSET_DIR/$fileName")
                     ?: error("Missing rule document: $fileName")
                 ).also { documentCache[fileName] = it }
@@ -190,7 +225,7 @@ class RuleConfigManager @Inject constructor(
 
     /** 读取指定二级 Markdown 标题下的正文。 */
     override fun readMarkdownSection(fileName: String, heading: String): String {
-        return runCatching { markdownSection(readDocument(fileName), heading) }
+        return runCatching { withOverrideFallback { markdownSection(readDocument(fileName), heading) } }
             .getOrElse { error ->
                 throw IllegalArgumentException(
                     "Missing Markdown section '$heading' in $fileName",
@@ -203,7 +238,7 @@ class RuleConfigManager @Inject constructor(
         fileName: String,
         deserializer: DeserializationStrategy<T>
     ): T {
-        val content = fileManager.readFile("$OVERRIDE_DIR/$fileName")
+        val content = readOverride(fileName)
             ?: readAsset("$ASSET_DIR/$fileName")
             ?: error("Missing YAML rule file: $fileName")
         return try {

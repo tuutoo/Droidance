@@ -8,6 +8,15 @@ Record a notable change in `Unreleased` within the same pull request that implem
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-07
+
+- Back up and restore conversations, screenshots, memory, skills, and settings in a password-encrypted file.
+- Export redacted diagnostics, with optional task content.
+- Move existing data into app storage during upgrade; uninstalling or clearing data removes app data.
+- Fix startup with incompatible rule overrides, default persona updates, and provider list positioning.
+
+**Breaking:** Install over the existing app, then open Droidance and connect the device service to migrate your data. Downgrading to 0.1.x is not supported. Before uninstalling, save a backup outside the app's storage and keep its password safe.
+
 ## [0.1.10] - 2026-11-06
 
 - Discover and manage provider models while keeping custom selections.

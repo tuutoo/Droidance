@@ -1687,8 +1687,9 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
             try {
                 Class<?> entry = Class.forName("com.droidance.runtime.RuntimeProcessHost");
                 agentRuntimeOwner = (IBinder) entry.getMethod("start", Context.class,
-                    IBinder.class, String.class, int.class, String.class, android.os.ParcelFileDescriptor.class)
-                    .invoke(null, resolveContext(), asBinder(), packageName, ownerUid, installationId, storage);
+                    IBinder.class, String.class, int.class, String.class, String.class, android.os.ParcelFileDescriptor.class)
+                    .invoke(null, resolveContext(), asBinder(), packageName, ownerUid, installationId,
+                        VirtualSpaceSidecarMain.storageDirectory(), storage);
                 return agentRuntimeOwner;
             } finally { android.os.Binder.restoreCallingIdentity(identity); }
         } catch (Throwable error) {

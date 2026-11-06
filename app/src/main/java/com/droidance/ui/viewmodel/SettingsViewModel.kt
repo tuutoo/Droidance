@@ -56,6 +56,8 @@ class SettingsViewModel @Inject constructor(
     private val displayCache: ConversationDisplayCache,
     private val historyDeletion: com.droidance.agent.ConversationHistoryDeletion,
     private val agentRuntime: com.droidance.agent.AgentRuntime,
+    private val dataBackupManager: com.droidance.backup.DataBackupManager,
+    private val diagnosticsReportExporter: com.droidance.debug.DiagnosticsReportExporter,
     @com.droidance.core.agent.di.ApplicationScope private val appScope: kotlinx.coroutines.CoroutineScope
 ) : ViewModel() {
 
@@ -407,8 +409,74 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    fun exportDebugPackage() {
-        if (_uiState.value.debugExporting || _uiState.value.dataClearing != null) return
+    private val dataBusy get() = _uiState.value.let { it.debugExporting || it.dataClearing != null || it.backupOperation != null }
+
+    fun exportBackup(target: android.net.Uri, password: String) = runBackup(BackupOperation.EXPORT) {
+        DataResult(BackupOperation.EXPORT, dataBackupManager.export(target, password))
+    }
+
+    fun restoreBackup(source: android.net.Uri, password: String) = runBackup(BackupOperation.RESTORE) {
+        DataResult(BackupOperation.RESTORE, dataBackupManager.restore(source, password))
+    }
+
+    private fun runBackup(operation: BackupOperation, action: () -> DataResult) {
+        if (dataBusy) return
+        _uiState.update { it.copy(backupOperation = operation, dataActionMessage = "") }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val result = action()
+                _uiState.update { it.copy(dataResult = result) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: com.droidance.backup.DataBackupManager.BackupException) {
+                _uiState.update { it.copy(dataActionMessage = systemSettingsNavigator.getString(backupFailure(e.code))) }
+            } finally {
+                _uiState.update { it.copy(backupOperation = null) }
+            }
+        }
+    }
+
+    private fun backupFailure(code: String): Int = when (code) {
+        "BACKUP_WRONG_PASSWORD" -> R.string.settings_backup_error_password
+        "BACKUP_NOT_RECOGNIZED" -> R.string.settings_backup_error_not_backup
+        "BACKUP_TRUNCATED", "BACKUP_CORRUPTED" -> R.string.settings_backup_error_corrupted
+        "BACKUP_UNSUPPORTED", "BACKUP_NEWER" -> R.string.settings_backup_error_newer
+        "BACKUP_BUSY" -> R.string.settings_backup_error_busy
+        "BACKUP_RUNTIME_UNAVAILABLE" -> R.string.settings_backup_error_unavailable
+        else -> R.string.settings_backup_error_failed
+    }
+
+    fun consumeDataResult() {
+        _uiState.update { it.copy(dataResult = null) }
+    }
+
+    fun restartAfterRestore() = dataBackupManager.restartApplication()
+
+    /** The redacted package by default; the full package only when the user includes task content. */
+    fun exportDiagnostics(includeTaskContent: Boolean) {
+        if (includeTaskContent) return exportDebugPackage()
+        if (dataBusy) return
+        _uiState.update { it.copy(debugExporting = true, dataActionMessage = "") }
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = diagnosticsReportExporter.export()
+                withContext(Dispatchers.Main) { systemSettingsNavigator.shareDebugPackage(file) }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(dataActionMessage = systemSettingsNavigator.getString(
+                        R.string.settings_export_failed,
+                        e.message ?: systemSettingsNavigator.getString(R.string.settings_unknown_error)))
+                }
+            } finally {
+                _uiState.update { it.copy(debugExporting = false) }
+            }
+        }
+    }
+
+    private fun exportDebugPackage() {
+        if (dataBusy) return
         _uiState.update {
             it.copy(debugExporting = true, dataActionMessage = "")
         }
@@ -437,7 +505,7 @@ class SettingsViewModel @Inject constructor(
 
     /** 清空所有对话 */
     fun clearAllConversations() {
-        if (_uiState.value.dataClearing != null || _uiState.value.debugExporting) return
+        if (dataBusy) return
         _uiState.update { it.copy(dataClearing = DataClearTarget.CONVERSATIONS, dataActionMessage = "") }
         appScope.launch(Dispatchers.IO) {
             val result = try { Result.success(historyDeletion.delete().also { displayCache.invalidate(null) }) }
@@ -461,7 +529,7 @@ class SettingsViewModel @Inject constructor(
 
     /** 清理诊断目录和当前运行日志；保留对话事件、回放附件、其他持久日志、记忆与设置。 */
     fun clearLogData() {
-        if (_uiState.value.dataClearing != null || _uiState.value.debugExporting) return
+        if (dataBusy) return
         _uiState.update { it.copy(dataClearing = DataClearTarget.LOGS, dataActionMessage = "") }
         appScope.launch(Dispatchers.IO) {
             val result = try {
@@ -560,6 +628,8 @@ data class SettingsUiState(
     // Debug 导出
     val debugExporting: Boolean = false,
     val dataClearing: DataClearTarget? = null,
+    val backupOperation: BackupOperation? = null,
+    val dataResult: DataResult? = null,
     val dataActionMessage: String = ""
 ) {
     /** The resident sidecar keeps device control after Wi-Fi loss closes the live ADB connection. */
@@ -609,3 +679,8 @@ data class ModelTokenUsage(
 ) {
     val total: Long get() = promptTokens + completionTokens
 }
+
+enum class BackupOperation { EXPORT, RESTORE }
+
+/** What a finished backup or restore carried, shown to the user. */
+data class DataResult(val operation: BackupOperation, val contents: com.droidance.backup.BackupContents)
