@@ -8,6 +8,10 @@ Record a notable change in `Unreleased` within the same pull request that implem
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-08
+
+- Fix runtime startup failures that prevented tasks from starting on affected Android devices.
+
 ## [0.2.0] - 2026-11-07
 
 - Back up and restore conversations, screenshots, memory, skills, and settings in a password-encrypted file.
