@@ -45,6 +45,7 @@ internal class ViewerControlIslandView(
     context: Context,
     private val onClose: () -> Unit,
     private val onBack: () -> Unit,
+    private val onTextInput: () -> Unit,
     private val onToggle: () -> Unit,
     private val onStop: () -> Unit,
     private val onDragStart: (Float, Float) -> Unit,
@@ -53,6 +54,7 @@ internal class ViewerControlIslandView(
 ) : LinearLayout(context) {
     private lateinit var statusView: RuntimeIslandLabelView
     private lateinit var backView: ImageButton
+    private lateinit var textInputView: ImageButton
     private lateinit var controlView: ImageButton
     private lateinit var stopView: ImageButton
     private var dragStartRawX = 0f
@@ -172,6 +174,14 @@ internal class ViewerControlIslandView(
             }
         )
         addView(
+            controlIconChip(R.drawable.ic_overlay_keyboard, R.string.takeover_text_input) {
+                onTextInput()
+            }.also {
+                textInputView = it
+                it.visibility = View.GONE
+            }
+        )
+        addView(
             controlIconChip(R.drawable.ic_overlay_pause, R.string.takeover_start_control) {
                 onToggle()
             }.also { controlView = it }
@@ -219,6 +229,8 @@ internal class ViewerControlIslandView(
         if (executing && !wasExecuting) animationStartedAtMs = SystemClock.uptimeMillis()
         statusView.setLabel(label, executing)
         backView.visibility = if (manual || teaching) View.VISIBLE else View.GONE
+        textInputView.visibility = if ((manual || teaching) && Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.UPSIDE_DOWN_CAKE) View.VISIBLE else View.GONE
         controlView.visibility = if (teaching) View.GONE else View.VISIBLE
         controlView.setImageResource(
             if (manual) R.drawable.ic_overlay_play else R.drawable.ic_overlay_pause

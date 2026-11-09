@@ -50,6 +50,10 @@ class NativeImeTextInput @Inject constructor(
         if (executionContexts.current() != execution || manager.activeBinding() != binding ||
             manager.retainedExecution.value?.executionId != execution.executionId)
             return@withLock failed("Frozen execution is no longer current")
+        // A virtual task must never take the user's global IME, even for an explicit request.
+        // Keep this check before driver setup, settings reads and all keyboard policy changes.
+        if (execution.isVirtualSpace) return@withLock failed(
+            "Background input cannot switch the system keyboard. Use method=shortcut or paste_key.")
         val policy = Json.parseToJsonElement(rules.readMarkdownSection("device_tools.md", "native_ime_input_policy")).jsonObject
         val timeout = policy.getValue("timeoutMs").jsonPrimitive.long.also { require(it in 1..10_000) }
         val poll = policy.getValue("pollMs").jsonPrimitive.long.also { require(it in 1..timeout) }

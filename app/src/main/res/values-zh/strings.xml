@@ -5,6 +5,9 @@
 -->
 
 <resources xmlns:tools="http://schemas.android.com/tools" tools:locale="zh">
+    <string name="takeover_text_input">输入文字</string>
+    <string name="takeover_insert_text">输入</string>
+    <string name="takeover_enter_key">回车</string>
     <string name="agent_text_input_method_name">Droidance 文本输入</string>
     <string name="composer_model_auto">自动</string>
     <string name="composer_model_title">模型</string>

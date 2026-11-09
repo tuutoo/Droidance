@@ -675,11 +675,15 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
             result.putString("diagnostic", "INPUT_FOCUS_INVALID_TOKEN");
             return result;
         }
-        claimInputFocus();
         focusQueries.entrySet().removeIf(entry -> started - entry.getValue().createdAt > 300000L);
         FocusQuery request = focusQueries.computeIfAbsent(executionToken, ignored -> new FocusQuery());
         String diagnostic = "INPUT_CONNECTION_NOT_READY";
         try {
+            if (!acceptsDisplay(targetDisplayId)) {
+                result.putString("diagnostic", "INPUT_DISPLAY_UNAVAILABLE");
+                return result;
+            }
+            claimInputFocus();
             while (SystemClock.elapsedRealtime() < deadline) {
                 String childToken;
                 synchronized (request) {
@@ -731,6 +735,7 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
                 request.canceled = true;
                 if (request.childToken != null) shellCommands.cancel(request.childToken);
             }
+            releaseInputFocus();
         }
         result.putString("diagnostic", diagnostic);
         result.putLong("elapsedMs", SystemClock.elapsedRealtime() - started);
@@ -971,6 +976,10 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
     public synchronized boolean setViewerImeEnabled(int targetDisplayId, boolean enabled, String owner, IBinder lifetime) {
         if (!acceptsDisplay(targetDisplayId) || viewerIme == null) return false;
         if (enabled && !viewerMirror.isOwnedBy(owner)) return false;
+        if (enabled && SidecarPlatformCompat.hasOwnDisplayFocus(Build.VERSION.SDK_INT)) {
+            fail("Viewer text entry belongs to the main-screen host on this platform");
+            return false;
+        }
         try {
             viewerIme.setEnabled(enabled, owner, lifetime);
             Log.i("ViewerIme", "display=" + targetDisplayId + " enabled=" + enabled + " owner=" + owner);
@@ -1004,6 +1013,10 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
     @Override
     public synchronized boolean setExecutionImeEnabled(int targetDisplayId, boolean enabled, String owner, IBinder lifetime) {
         if (!acceptsInteractiveDisplay(targetDisplayId) || viewerIme == null) return false;
+        if (enabled) {
+            fail("BACKGROUND_IME_DISABLED: use display-scoped text input without changing the user's keyboard");
+            return false;
+        }
         try { viewerIme.setEnabled(enabled, owner, lifetime); return true; }
         catch (Exception error) {
             fail("Execution IME policy unavailable: " + safeMessage(error));

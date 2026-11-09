@@ -11,7 +11,9 @@ import com.droidance.agent.device.*
 
 
 import android.annotation.SuppressLint
+import android.app.AlertDialog
 import android.content.Context
+import android.content.DialogInterface
 import androidx.compose.ui.graphics.toArgb
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
@@ -29,6 +31,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.EditText
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -127,6 +130,8 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
     private var stopRequested = false
     private var returningToResult = false
     private var backDispatchInFlight = false
+    private var textInputDialog: AlertDialog? = null
+    private var textInputOpening = false
     private val performanceTracker = VirtualSpaceViewerPerformanceTracker()
     private val density: Float get() = resources.displayMetrics.density
 
@@ -143,7 +148,7 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
         // remains on the virtual display. It must own main-display focus; otherwise
         // covering MainActivity leaves the process with no focused window and the
         // system reports an input-dispatch ANR when the viewer is closed.
-        // The host remains focusable while the editor and its IME stay on the virtual display.
+        // On Android 14+, manual text is entered here so the virtual display never needs top focus.
         WindowCompat.setDecorFitsSystemWindows(window, false)
         @Suppress("DEPRECATION")
         window.statusBarColor = Color.TRANSPARENT
@@ -248,6 +253,7 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
     // Keep the mirror and its IME owner until the viewer actually leaves the screen.
     override fun onStop() {
         viewerVisible = false
+        textInputDialog?.dismiss()
         virtualSpaceManager.authorizeViewerIme(null)
         displayedBinding = null
         if (::viewerMirror.isInitialized) viewerMirror.update(null)
@@ -404,6 +410,7 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
         // Its placement stays shared with the collapsed runtime island.
         islandView = ViewerControlIslandView(
             this, ::closeViewer, onBack = { sendVirtualBack("island") }, onToggle = ::toggleTakeover,
+            onTextInput = ::showTextInput,
             onStop = ::stopTaskFromIsland,
             onDragStart = ::beginIslandDrag, onDragMove = ::dragIslandTo, onDragEnd = ::endIslandDrag
         )
@@ -565,6 +572,7 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
         previewView.isClickable = inputEnabled
         virtualSpaceManager.authorizeViewerIme(virtualSpaceManager.activeBinding().takeIf { viewerVisible && inputEnabled })
         if (!inputEnabled) {
+            textInputDialog?.dismiss()
             nativeImeBottomInsetPx = 0
             updateInputBottomInset()
         }
@@ -708,6 +716,77 @@ class VirtualSpaceViewerActivity : AppCompatActivity() {
             } finally {
                 backDispatchInFlight = false
                 if (recordingKey) pendingLearningCaptures.decrementAndGet()
+            }
+        }
+    }
+
+    private fun showTextInput() {
+        val binding = displayedBinding ?: return
+        if (!canSendVirtualBack(binding) || textInputDialog != null || textInputOpening) return
+        textInputOpening = true
+        lifecycleScope.launch {
+            try {
+                awaitInputSettlement()
+                if (!canSendVirtualBack(binding)) return@launch
+                val target = withContext(Dispatchers.IO) { virtualSpaceManager.viewerInputTarget(binding) }
+                if (target == null || !canSendVirtualBack(binding)) {
+                    showChannelError()
+                    return@launch
+                }
+                val editor = EditText(this@VirtualSpaceViewerActivity).apply {
+                    inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    setPadding(dp(20), dp(12), dp(20), dp(12))
+                }
+                val dialog = AlertDialog.Builder(this@VirtualSpaceViewerActivity)
+                    .setTitle(R.string.takeover_text_input)
+                    .setView(editor)
+                    .setNegativeButton(R.string.common_cancel, null)
+                    .setPositiveButton(R.string.takeover_insert_text, null)
+                    .setNeutralButton(R.string.takeover_enter_key, null)
+                    .create()
+                textInputDialog = dialog
+                dialog.setOnDismissListener { if (textInputDialog === dialog) textInputDialog = null }
+                dialog.setOnShowListener {
+                    editor.requestFocus()
+                    dialog.window?.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+                    editor.post {
+                        getSystemService(android.view.inputmethod.InputMethodManager::class.java)
+                            .showSoftInput(editor, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    }
+                    fun submit(sendEnter: Boolean) {
+                        val text = editor.text.toString()
+                        if ((!sendEnter && text.isEmpty()) || !canSendVirtualBack(binding)) return
+                        // A user submission is one delivery attempt, including an unknown timeout.
+                        dialog.getButton(DialogInterface.BUTTON_POSITIVE).isEnabled = false
+                        dialog.getButton(DialogInterface.BUTTON_NEUTRAL).isEnabled = false
+                        editor.isEnabled = false
+                        lifecycleScope.launch {
+                            val recording = isTeaching()
+                            if (recording) pendingLearningCaptures.incrementAndGet()
+                            try {
+                                val before = if (recording) withContext(Dispatchers.IO) {
+                                    virtualSpaceManager.captureLatestPreviewJpeg()
+                                } else null
+                                val sent = withContext(Dispatchers.IO) {
+                                    val typed = text.isEmpty() || virtualSpaceManager.injectViewerText(binding, target, text)
+                                    typed && (!sendEnter || virtualSpaceManager.injectViewerKey(binding, target, KeyEvent.KEYCODE_ENTER))
+                                }
+                                if (sent) dialog.dismiss() else showChannelError()
+                                if (recording && binding == virtualSpaceManager.activeBinding()) withContext(Dispatchers.IO) {
+                                    recordKeyAfterSettling(KeyEvent.KEYCODE_PASTE,
+                                        UserDemonstrationActionType.TEXT_INPUT, before, sent)
+                                }
+                            } finally {
+                                if (recording) pendingLearningCaptures.decrementAndGet()
+                            }
+                        }
+                    }
+                    dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener { submit(false) }
+                    dialog.getButton(DialogInterface.BUTTON_NEUTRAL).setOnClickListener { submit(true) }
+                }
+                dialog.show()
+            } finally {
+                textInputOpening = false
             }
         }
     }

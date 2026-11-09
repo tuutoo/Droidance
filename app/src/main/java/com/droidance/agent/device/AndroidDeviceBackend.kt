@@ -79,6 +79,9 @@ class AndroidDeviceBackend @Inject constructor(
 
     override suspend fun setKeyboardVisible(visible: Boolean): DeviceInputResult =
         kotlinx.coroutines.runInterruptible(kotlinx.coroutines.Dispatchers.IO) {
+            if (visible) return@runInterruptible DeviceInputResult(false,
+                "Background execution keeps the user's keyboard unchanged. Use screen_act type_text with shortcut or paste_key.",
+                diagnosticCode = "BACKGROUND_IME_DISABLED")
             val execution = executionContextStore.requireCurrent()
             val binding = frozenSidecarBinding(execution)
                 ?: return@runInterruptible DeviceInputResult(false, "Frozen keyboard backend unavailable",

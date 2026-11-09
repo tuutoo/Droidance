@@ -23,6 +23,8 @@ Use command for the exact Android sh source; do not prepend host-side adb shell.
 ## screen_act_description
 Operate the bound display with visible controls in normalized 0..1000 coordinates or an exact observed target_id. When a user stopping condition is reached, preserve the interface and report it instead of dismissing or routing around it.
 
+Keep background input on the bound virtual display. Use type_text with shortcut (default) or paste_key; the system keyboard may remain hidden. Do not enable or switch the device's IME, request android_act(op="keyboard", visible=true), or use Shell to claim main-display focus as a text-entry or recovery mechanism. This input constraint does not prohibit a keyboard-settings change explicitly requested by the user. A hidden keyboard is not an input failure. Verify delivery from the resulting editor; do not replay text whose delivery is already confirmed or remains uncertain.
+
 For a small or uncertain target, crop it with android_read(op="crop") and click with coordinate_ref=crop_ref and crop-local x/y. After a tap without visible effect, compare tap_feedback with the current frame and re-localize the control. BACK leaves an overlay when that preserves needed state.
 
 CAPTCHA and graphical human-verification challenges require ask_human or a non-success completion; never solve, refresh or switch entries to get around them. Only an explicitly authorized non-CAPTCHA one-time-code flow may use authorized current sources for that service, and its acceptance must be verified.

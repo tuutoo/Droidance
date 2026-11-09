@@ -397,7 +397,8 @@ class VirtualSpaceManager @Inject constructor(
     fun setViewerImeEnabled(binding: SidecarSessionBinding, enabled: Boolean, owner: String,
         lifetime: android.os.IBinder): Boolean = synchronized(viewerImeLock) {
         if (binding != activeBinding()) return@synchronized false
-        val authorized = enabled && binding == viewerImeAuthorizedBinding
+        val authorized = enabled && binding == viewerImeAuthorizedBinding &&
+            android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE
         val result = sidecarBridge.setViewerImeEnabled(binding, authorized, owner, lifetime)
         debugLogManager.appendEvent("virtual_space: viewer_ime requested=$enabled authorized=$authorized ok=${result.ok}")
         if (!result.ok) return@synchronized false
@@ -426,6 +427,7 @@ class VirtualSpaceManager @Inject constructor(
         handoffFocus: Boolean = true): Boolean =
         synchronized(viewerImeLock) {
             if (binding != activeBinding() || executionId != activeExecutionId) return@synchronized false
+            if (visible) return@synchronized false
             val owner = binding to executionId
             val result = sidecarBridge.setExecutionImeEnabled(binding, visible, executionId, executionImeLifetime)
             if (!result.ok) return@synchronized false
@@ -540,6 +542,22 @@ class VirtualSpaceManager @Inject constructor(
             )
         }
         return result.ok
+    }
+
+    fun viewerInputTarget(binding: SidecarSessionBinding): String? {
+        if (binding != viewerImeAuthorizedBinding || binding != activeBinding()) return null
+        return sidecarBridge.getInputFocusState(binding.displayId, binding.runtimeMode, binding.backendSessionId)
+    }
+
+    fun injectViewerText(binding: SidecarSessionBinding, target: String, text: String): Boolean {
+        if (binding != viewerImeAuthorizedBinding || binding != activeBinding()) return false
+        return sidecarBridge.injectText(binding.displayId, text, false, binding.runtimeMode,
+            binding.backendSessionId, target, com.droidance.core.agent.tools.TextInputMethod.SHORTCUT).ok
+    }
+
+    fun injectViewerKey(binding: SidecarSessionBinding, target: String, keyCode: Int): Boolean {
+        if (viewerInputTarget(binding) != target) return false
+        return injectKey(binding, keyCode)
     }
 
     /**

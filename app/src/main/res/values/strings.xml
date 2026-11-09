@@ -5,6 +5,9 @@
 -->
 
 <resources xmlns:tools="http://schemas.android.com/tools" tools:locale="en">
+    <string name="takeover_text_input">Type text</string>
+    <string name="takeover_insert_text">Insert</string>
+    <string name="takeover_enter_key">Enter</string>
     <string name="agent_text_input_method_name">Droidance text input</string>
     <string name="composer_model_auto">Auto</string>
     <string name="composer_model_title">Model</string>

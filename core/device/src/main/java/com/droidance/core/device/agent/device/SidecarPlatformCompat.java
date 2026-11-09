@@ -19,6 +19,7 @@ final class SidecarPlatformCompat {
     private static final int OWN_DISPLAY_GROUP = 1 << 11;
     private static final int ALWAYS_UNLOCKED = 1 << 12;
     private static final int OWN_FOCUS = 1 << 14;
+    private static final int STEAL_TOP_FOCUS_DISABLED = 1 << 16;
 
     static final String INPUT_INJECTION_DENIED = "INPUT_INJECTION_DENIED: the system blocked input from wireless "
             + "debugging. Enable the developer option for USB debugging security settings, or disable "
@@ -47,12 +48,11 @@ final class SidecarPlatformCompat {
         // OWN_FOCUS 是注入能否生效的前提：App 自己的查看页/接管面板长期在主屏前台持有焦点，
         // 没有这个 flag 时虚拟屏不维护自己的焦点与触摸模式，注入的 tap/swipe 会被系统丢弃
         // （agent 和人工接管同时"点不动、滑不动"）。该 flag 要求同屏已置 TRUSTED。
-        // OWN_FOCUS keeps input events scoped to this display. The platform IME stays
-        // hidden by default. The viewer or the same Agent can explicitly enable the
-        // selected native keyboard; background text uses display-scoped keys/clipboard.
-        // Do not disable stealing top focus: Android's native IME needs the editor's
-        // display to become top focused. The viewer IME owner returns focus when hidden.
-        if (hasOwnDisplayFocus(sdk)) flags |= OWN_FOCUS;
+        // OWN_FOCUS keeps input events scoped to this display. Background text uses
+        // display-scoped keys/clipboard without selecting the user's system IME.
+        // A background display needs its own focus without taking the physical screen's
+        // top focus and IME connection. Manual text entry is hosted by the main-screen viewer.
+        if (hasOwnDisplayFocus(sdk)) flags |= OWN_FOCUS | STEAL_TOP_FOCUS_DISABLED;
         return flags;
     }
 

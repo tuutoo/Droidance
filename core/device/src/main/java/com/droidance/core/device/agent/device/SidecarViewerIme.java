@@ -101,7 +101,7 @@ final class SidecarViewerIme implements AutoCloseable {
     }
 
     synchronized void returnInputFocus() throws Exception {
-        if (!active || platform.bottomInset(displayId) == 0) restoreHostFocus();
+        if (awaitingFocusReturn && (!active || platform.bottomInset(displayId) == 0)) restoreHostFocus();
     }
 
     private void restoreHostFocus() throws Exception {
@@ -122,6 +122,8 @@ final class SidecarViewerIme implements AutoCloseable {
         active = false;
         if (owner != null) {
             platform.hideIme();
+        }
+        if (awaitingFocusReturn) {
             restoreHostFocus();
         }
         if (lifetime != null && deathRecipient != null) {

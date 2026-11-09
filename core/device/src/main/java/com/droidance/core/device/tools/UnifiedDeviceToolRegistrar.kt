@@ -202,7 +202,7 @@ class UnifiedDeviceToolRegistrar(
                 put("selection", ToolParameter("string", "Provider selection with ? placeholders for op=content.", false))
                 put("selection_args", ToolParameter("array", "Provider selection values for op=content.", false,
                     items = ToolParameter("string", "Selection argument.", false)))
-                put("visible", ToolParameter("boolean", "For op=keyboard: allow the user's native keyboard on the execution display, or hide it. Inspect the frame and use its visible controls; this does not type or submit text.", false,
+                put("visible", ToolParameter("boolean", "For op=keyboard: false hides an execution keyboard. Showing or switching the system keyboard is unavailable during background execution; use screen_act type_text instead.", false,
                     requiredWhen = mapOf("op" to listOf("keyboard"))))
             }
         )
