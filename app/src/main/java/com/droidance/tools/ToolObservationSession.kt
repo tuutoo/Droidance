@@ -207,7 +207,8 @@ internal class ToolObservationSession(
         targetY: Int? = null,
         usePendingTarget: Boolean = true,
         scrollCheckpoint: ScreenBatchScrollCheckpoint? = null,
-        surfaceGesture: Boolean = false
+        surfaceGesture: Boolean = false,
+        targetRegion: ModelCoordinateMapper.Bounds? = null
     ): PreActionObservationCheck {
         // The Agent has decided; further samples would describe the action, not the decision.
         stopSurfaceSampling()
@@ -273,6 +274,31 @@ internal class ToolObservationSession(
             "pre_action_batch_scroll_checkpoint" to 1L,
             "pre_action_batch_scroll_captured_elapsed_ms" to scrollCheckpoint.capturedAtElapsedMs
         ) else emptyMap()
+        if (targetRegion != null) {
+            val component = lease.foregroundComponent ?: return unavailable("decision_foreground_missing")
+            val current = localActionVerifier.currentForegroundComponentForContext(execution)
+            if (current != component) return unavailable("regional_drag_foreground_changed")
+            if (!hasCurrentModelObservationLease(execution)) return unavailable("lease_changed_during_region_check")
+            val bounds = currentModelCoordinateMapper.toPhysicalBounds(
+                targetRegion.left, targetRegion.top, targetRegion.right, targetRegion.bottom)
+            val decision = PreActionFreshness.decideRegion(reference, currentSample.width, currentSample.height,
+                { x, y -> colors.getValue(x to y) }, intArrayOf(bounds.left, bounds.top, bounds.right, bounds.bottom),
+                policy.preActionObservationPixelDelta)
+            val local = decision.local
+            // This exception to the decision boundary always enforces the declared region. Moving
+            // content, unchanged pixels elsewhere, and an observe-only global policy cannot waive it.
+            return PreActionObservationCheck(
+                if (decision.allowed) null else ToolProtocolResult.notExecuted(
+                    "PRE_ACTION_OBSERVATION_CHANGED", true, details = buildJsonObject {
+                        put("target_check", if (local == null) "region_unavailable" else "region_changed")
+                        put("action_delivered", false)
+                    }),
+                metrics + mapOf(
+                    "pre_action_region_sampled_pixels" to (local?.sampledPixels?.toLong() ?: 0L),
+                    "pre_action_region_changed_fraction_ppm" to
+                        (local?.changedFraction?.times(1_000_000)?.roundToLong() ?: -1L)
+                ), SystemClock.elapsedRealtime())
+        }
         if (policy.preActionObservationMode == "enforce") {
             val pending = pendingActionTarget.takeIf { usePendingTarget }
             val effectiveTargetId = targetId ?: pending?.targetId
@@ -645,7 +671,7 @@ internal class ToolObservationSession(
         return com.droidance.core.device.tools.VisualFrameSampler(
             capture = { deviceBackend.sampleScreen() }, elapsedMillis = { SystemClock.elapsedRealtime() })
             .sample(policy.timeoutMs, policy.intervalMs, policy.stableSamples, policy.pixelDelta,
-                policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples)
+                policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples, policy.minStableMs)
     }
 
     private fun capturePolicy(section: String): com.droidance.core.device.tools.PostActionFrameCapture.Policy {
@@ -663,7 +689,8 @@ internal class ToolObservationSession(
             settleExtensionMs = checkNotNull(config["settleExtensionMs"]?.jsonPrimitive?.longOrNull),
             lateChangeProbeMs = checkNotNull(config["lateChangeProbeMs"]?.jsonPrimitive?.longOrNull),
             newViewChangedFraction = checkNotNull(config["newViewChangedFraction"]?.jsonPrimitive?.doubleOrNull),
-            quietViewChangedFraction = checkNotNull(config["quietViewChangedFraction"]?.jsonPrimitive?.doubleOrNull)
+            quietViewChangedFraction = checkNotNull(config["quietViewChangedFraction"]?.jsonPrimitive?.doubleOrNull),
+            minStableMs = checkNotNull(config["minStableMs"]?.jsonPrimitive?.longOrNull)
         )
     }
 

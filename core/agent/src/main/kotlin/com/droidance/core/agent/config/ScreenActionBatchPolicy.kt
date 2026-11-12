@@ -27,6 +27,8 @@ data class ScreenActionBatchPolicy(
     val maxCaptureBytes: Long,
     @SerialName("max_drag_repeat")
     val maxDragRepeat: Int,
+    @SerialName("max_regional_drags")
+    val maxRegionalDrags: Int,
     @SerialName("decision_boundary_operations")
     val decisionBoundaryOperations: List<String>
 ) {
@@ -41,6 +43,7 @@ data class ScreenActionBatchPolicy(
         require(maxTotalWaitMs >= maxWaitMs)
         require(maxCaptureImages > 0)
         require(maxDragRepeat > 0)
+        require(maxRegionalDrags > 0)
         require(decisionBoundaryOperations.distinct().size == decisionBoundaryOperations.size)
         require(decisionBoundaryOperations.all { it in allowedOperations })
         require(maxCaptureBytes in 1..maxCaptureImages.toLong() * 2 * com.droidance.core.agent.HistoricalObservationImages.MAX_IMAGE_BYTES)

@@ -10,6 +10,7 @@ import com.droidance.core.device.tools.*
 import com.droidance.tools.*
 
 import com.droidance.core.agent.event.TurnEventScope
+import com.droidance.core.agent.UserInteractionState
 import com.droidance.core.agent.config.ToolSafetyPolicy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -27,7 +28,9 @@ import java.security.MessageDigest
  * Shell patterns are heuristics, not an execution sandbox or a proof of isolation.
  * The program worker has a separate OS identity and exposes only mediated capabilities.
  */
-object ToolRiskPolicy {
+internal object ToolRiskPolicy {
+    const val CONFIRMATION_REQUIRED = "HIGH_RISK_CONFIRMATION_REQUIRED"
+
     data class Decision(
         val allowed: Boolean,
         val reason: String = "",
@@ -37,13 +40,22 @@ object ToolRiskPolicy {
 
     private val confirmations = HighRiskConfirmationStore()
 
-    fun confirmNextHighRisk(scope: TurnEventScope): Boolean = confirmations.confirm(scope)
+    fun remainingConfirmationMs(scope: TurnEventScope, callId: String): Long? =
+        confirmations.remainingMs(scope, callId)
+
+    fun respondToConfirmation(scope: TurnEventScope, callId: String, allow: Boolean?): UserInteractionState? =
+        confirmations.respond(scope, callId, allow)
 
     fun revoke(scope: TurnEventScope) = confirmations.revoke(scope)
 
-    private fun consumeOneShotConfirmation(scope: TurnEventScope, actionKey: String, reason: String): Decision =
-        if (confirmations.consumeOrRequest(scope, actionKey)) Decision(allowed = true)
-        else blocked(reason, requiresConfirmation = true)
+    fun confirmationRejection(state: UserInteractionState) = ToolProtocolResult.notExecuted(
+        code = when (state) {
+            UserInteractionState.DENIED -> "HIGH_RISK_CONFIRMATION_DENIED"
+            UserInteractionState.EXPIRED -> "HIGH_RISK_CONFIRMATION_EXPIRED"
+            else -> error("Unexpected confirmation state: $state")
+        },
+        retryable = false
+    )
 
     /**
      * Confirmation identity must be stable across processes and collision-resistant. Kotlin's
@@ -54,9 +66,7 @@ object ToolRiskPolicy {
     private fun actionKey(toolName: String, arguments: String): String {
         val canonicalArguments = runCatching {
             canonicalize(Json.parseToJsonElement(arguments)).toString()
-        }.getOrElse {
-            arguments.trim().replace(Regex("\\s+"), " ")
-        }
+        }.getOrDefault(arguments)
         val digest = MessageDigest.getInstance("SHA-256")
             .digest("$toolName\u0000$canonicalArguments".toByteArray(Charsets.UTF_8))
         return "$toolName:${digest.joinToString("") { "%02x".format(it.toInt() and 0xff) }}"
@@ -72,12 +82,17 @@ object ToolRiskPolicy {
         else -> element
     }
 
-    private fun blockedOrConfirmed(scope: TurnEventScope, toolName: String, arguments: String, reason: String): Decision =
-        consumeOneShotConfirmation(scope, actionKey(toolName, arguments), reason)
+    private fun blockedOrConfirmed(
+        scope: TurnEventScope, callId: String, toolName: String, arguments: String, reason: String
+    ): Decision = when (val state = confirmations.consumeOrRequest(scope, callId, actionKey(toolName, arguments))) {
+        UserInteractionState.RESOLVED -> Decision(allowed = true)
+        UserInteractionState.PENDING -> blocked(reason, requiresConfirmation = true)
+        else -> confirmationRejection(state).let { Decision(false, it.outputText, rejection = it) }
+    }
 
     private fun blocked(reason: String, requiresConfirmation: Boolean = false): Decision {
         val rejection = ToolProtocolResult.notExecuted(
-            code = if (requiresConfirmation) "HIGH_RISK_CONFIRMATION_REQUIRED" else "TOOL_POLICY_BLOCKED",
+            code = if (requiresConfirmation) CONFIRMATION_REQUIRED else "TOOL_POLICY_BLOCKED",
             retryable = requiresConfirmation,
             details = buildJsonObject {
                 put("reason", JsonPrimitive(reason))
@@ -87,10 +102,13 @@ object ToolRiskPolicy {
         return Decision(false, rejection.outputText, requiresConfirmation, rejection)
     }
 
-    fun assess(toolName: String, arguments: String, policy: ToolSafetyPolicy, scope: TurnEventScope): Decision = when (toolName) {
-        DeviceToolNames.SHELL -> assessShell(arguments, policy, scope)
+    fun assess(
+        toolName: String, arguments: String, policy: ToolSafetyPolicy, scope: TurnEventScope, callId: String
+    ): Decision = when (toolName) {
+        DeviceToolNames.SHELL -> assessShell(arguments, policy, scope, callId)
         in policy.confirmationTools -> blockedOrConfirmed(
             scope = scope,
+            callId = callId,
             toolName = toolName,
             arguments = arguments,
             reason = "$toolName can affect external communication, personal data, or device state."
@@ -98,7 +116,7 @@ object ToolRiskPolicy {
         else -> Decision(allowed = true)
     }
 
-    private fun assessShell(arguments: String, policy: ToolSafetyPolicy, scope: TurnEventScope): Decision {
+    private fun assessShell(arguments: String, policy: ToolSafetyPolicy, scope: TurnEventScope, callId: String): Decision {
         val command = runCatching {
             Json.parseToJsonElement(arguments).jsonObject["command"]?.jsonPrimitive?.contentOrNull.orEmpty()
         }.getOrDefault("")
@@ -114,7 +132,8 @@ object ToolRiskPolicy {
         }
 
         if (policy.shellDestructivePatterns.any { Regex(it).containsMatchIn(lower) }) {
-            return blockedOrConfirmed(scope = scope, toolName = DeviceToolNames.SHELL, arguments = arguments, reason = "shell blocked a privileged command that may modify the system, delete data, or terminate processes.")
+            return blockedOrConfirmed(scope, callId, DeviceToolNames.SHELL, arguments,
+                "shell blocked a privileged command that may modify the system, delete data, or terminate processes.")
         }
 
         return Decision(allowed = true)

@@ -147,6 +147,8 @@ internal class ProviderExchangeRecorder(private val root: File) {
     }
 
     companion object {
+        /** Owner-side diagnostic snapshots and duplicate reclamation must not race file opens. */
+        internal val imageFilesLock = Any()
         /** Retained exchanges contain prompts and screenshots; bound their age and total size. */
         private const val RETENTION_MS = 7L * 24 * 60 * 60 * 1000
         private const val MAX_TOTAL_BYTES = 512L * 1024 * 1024

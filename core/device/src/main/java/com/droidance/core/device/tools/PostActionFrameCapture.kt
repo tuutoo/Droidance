@@ -30,7 +30,7 @@ class PostActionFrameCapture(
         val stableSamples: Int, val pixelDelta: Int, val changedFraction: Double,
         val localizedMotionMaxFraction: Double = 0.0, val localizedMotionSamples: Int = 3,
         val settleExtensionMs: Long = 0, val lateChangeProbeMs: Long = 0, val newViewChangedFraction: Double = 1.0,
-        val quietViewChangedFraction: Double = 0.0) {
+        val quietViewChangedFraction: Double = 0.0, val minStableMs: Long = 0) {
         init {
             require(initialWaitMs in 0..1000 && timeoutMs in 1..5000 && intervalMs in 1..500)
             require(stableSamples in 2..6 && pixelDelta in 0..255 && changedFraction in 0.0..1.0)
@@ -38,6 +38,7 @@ class PostActionFrameCapture(
             require(settleExtensionMs in 0..5000)
             require(lateChangeProbeMs in 0..2000 && newViewChangedFraction in 0.0..1.0)
             require(quietViewChangedFraction in 0.0..newViewChangedFraction)
+            require(minStableMs in 0..2000)
         }
     }
 
@@ -59,7 +60,7 @@ class PostActionFrameCapture(
         waitMillis(initialDelay)
         val sampleBudget = deadline - elapsedMillis()
         val readiness = if (sampleBudget > 0) sampler.sample(sampleBudget, policy.intervalMs, policy.stableSamples,
-            policy.pixelDelta, policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples)
+            policy.pixelDelta, policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples, policy.minStableMs)
         else VisualFrameSampler.Result(false, 0, 0, diagnostics = mapOf("deadline_exhausted" to 1L))
         coroutineContext.ensureActive()
         // Always retain one fresh evidence frame, even after readiness exhausts its budget.
@@ -111,7 +112,7 @@ class PostActionFrameCapture(
                 !(effective.stable || effective.localizedMotion)) break
             val extensionStarted = elapsedMillis()
             effective = sampler.sample(extensionRemaining, policy.intervalMs, policy.stableSamples,
-                policy.pixelDelta, policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples)
+                policy.pixelDelta, policy.changedFraction, policy.localizedMotionMaxFraction, policy.localizedMotionSamples, policy.minStableMs)
             extensionMs += (elapsedMillis() - extensionStarted).coerceAtLeast(0)
             coroutineContext.ensureActive()
             frame = captureFrame()
@@ -135,7 +136,7 @@ class PostActionFrameCapture(
                 val lateStarted = elapsedMillis()
                 effective = sampler.sample(maxOf(policy.settleExtensionMs, policy.timeoutMs), policy.intervalMs,
                     policy.stableSamples, policy.pixelDelta, policy.changedFraction,
-                    policy.localizedMotionMaxFraction, policy.localizedMotionSamples)
+                    policy.localizedMotionMaxFraction, policy.localizedMotionSamples, policy.minStableMs)
                 extensionMs += (elapsedMillis() - lateStarted).coerceAtLeast(0)
                 coroutineContext.ensureActive()
                 frame = captureFrame()

@@ -59,7 +59,7 @@ internal object RuntimeStorageSnapshot {
         } finally { temporary.delete() }
     }
 
-    fun managedFiles(context: Context): ParcelFileDescriptor {
+    fun managedFiles(context: Context): ParcelFileDescriptor = synchronized(com.droidance.debug.ProviderExchangeRecorder.imageFilesLock) {
         val temporary = File.createTempFile("runtime-files-", ".zip", context.cacheDir)
         try {
             val root = File(context.noBackupFilesDir, "droidance-data")
@@ -70,7 +70,7 @@ internal object RuntimeStorageSnapshot {
                     zip.closeEntry()
                 }
             }
-            return ParcelFileDescriptor.open(temporary, ParcelFileDescriptor.MODE_READ_ONLY)
+            ParcelFileDescriptor.open(temporary, ParcelFileDescriptor.MODE_READ_ONLY)
         } finally { temporary.delete() }
     }
 

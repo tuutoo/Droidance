@@ -30,6 +30,8 @@ import com.droidance.ui.mascot.MascotStage
 import com.droidance.ui.viewmodel.UpdateViewModel
 import com.droidance.update.model.UpdateCheckError
 import com.droidance.update.model.UpdateCheckState
+import java.text.DateFormat
+import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +46,9 @@ fun SettingsAboutScreen(
     val openFailed = stringResource(R.string.ui_open_failed)
     val context = LocalContext.current
     val repositoryUrl = stringResource(R.string.settings_repository_url)
+    val dateFormat = remember(context.resources.configuration.locales[0]) {
+        DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, context.resources.configuration.locales[0])
+    }
 
     val checkState by updateViewModel.checkState.collectAsStateWithLifecycle()
     val availableRelease by updateViewModel.availableRelease.collectAsStateWithLifecycle()
@@ -105,12 +110,24 @@ fun SettingsAboutScreen(
                     val updateSubtitle = when (val state = checkState) {
                         is UpdateCheckState.Checking -> stringResource(R.string.update_status_checking)
                         is UpdateCheckState.UpToDate -> stringResource(R.string.update_status_latest)
-                        is UpdateCheckState.UpdateAvailable -> stringResource(R.string.update_status_available, state.release.versionName)
-                        is UpdateCheckState.CheckFailed -> when (state.reason) {
-                            UpdateCheckError.RATE_LIMITED -> stringResource(R.string.update_status_error_rate_limited)
-                            UpdateCheckError.NETWORK_ERROR -> stringResource(R.string.update_status_error_network)
-                            else -> stringResource(R.string.update_status_error_generic)
-                        }
+                        is UpdateCheckState.UpdateAvailable -> listOfNotNull(
+                            stringResource(R.string.update_status_available, state.release.versionName),
+                            if (state.fromCache) stringResource(R.string.update_status_cached,
+                                dateFormat.format(Date(state.checkedAt))) else null
+                        ).joinToString("\n")
+                        is UpdateCheckState.CheckFailed -> listOfNotNull(
+                            when (state.reason) {
+                                UpdateCheckError.RATE_LIMITED -> stringResource(R.string.update_status_error_rate_limited)
+                                UpdateCheckError.ACCESS_DENIED -> stringResource(R.string.update_status_error_access_denied)
+                                UpdateCheckError.NETWORK_ERROR -> stringResource(R.string.update_status_error_network)
+                                else -> stringResource(R.string.update_status_error_generic)
+                            },
+                            if (state.retryAt > System.currentTimeMillis()) stringResource(R.string.update_status_retry_after,
+                                dateFormat.format(Date(state.retryAt))) else null,
+                            if (availableRelease != null && state.lastSuccessfulCheckAt > 0)
+                                stringResource(R.string.update_status_cached,
+                                    dateFormat.format(Date(state.lastSuccessfulCheckAt))) else null
+                        ).joinToString("\n")
                         UpdateCheckState.Disabled -> stringResource(R.string.update_status_disabled)
                         UpdateCheckState.Idle -> null
                     }

@@ -47,11 +47,18 @@ class ConversationHistoryDeletion @Inject constructor(
 /** Caller owns the runtime execution lane, so no put-to-event-commit gap can race the sweep. */
 internal suspend fun purgeConversationData(events: AgentEventStore, blobs: BlobStore, threadIds: Set<String>) {
     events.purgeThreads(threadIds)
-    val referenced = events.allReferencedBlobRefs()
+    deleteUnreferencedBlobs(blobs, events.allReferencedBlobRefs())
+}
+
+/** Caller must hold the execution lane until all blob writers have committed their events. */
+internal suspend fun deleteUnreferencedBlobs(blobs: BlobStore, referenced: Set<String>): Int {
+    var deleted = 0
     for (ref in blobs.listAllRefs() - referenced) {
         currentCoroutineContext().ensureActive()
         if (!blobs.delete(ref) && ref in blobs.listAllRefs()) {
             throw java.io.IOException("An unreferenced attachment could not be deleted")
         }
+        deleted++
     }
+    return deleted
 }

@@ -3,43 +3,63 @@
 
 package com.droidance.tools
 
-import com.droidance.core.agent.tools.*
-import com.droidance.core.knowledge.tools.*
-import com.droidance.core.device.tools.*
-
-import com.droidance.tools.*
-
+import com.droidance.core.agent.UserInteractionState
 import com.droidance.core.agent.event.TurnEventScope
+import java.util.concurrent.TimeUnit
 
-/** One-shot grants belong to the exact Turn and payload, and expire without renewal on confirmation. */
+/** A response belongs to the exact turn, call and payload. */
 internal class HighRiskConfirmationStore(
-    private val nowMs: () -> Long = System::currentTimeMillis,
+    private val nowMs: () -> Long = { TimeUnit.NANOSECONDS.toMillis(System.nanoTime()) },
     private val windowMs: Long = 60_000L
 ) {
-    private data class Pending(val actionKey: String, val expiresAtMs: Long, val authorized: Boolean = false)
-    private val pending = mutableMapOf<TurnEventScope, Pending>()
+    private data class Request(
+        val callId: String,
+        val actionKey: String,
+        val expiresAtMs: Long,
+        val approved: Boolean = false
+    )
+
+    private val pending = mutableMapOf<TurnEventScope, Request>()
+    private val declined = mutableMapOf<TurnEventScope, MutableMap<String, UserInteractionState>>()
 
     @Synchronized
-    fun confirm(scope: TurnEventScope): Boolean {
-        val request = pending[scope] ?: return false
-        if (request.expiresAtMs < nowMs()) {
+    fun consumeOrRequest(scope: TurnEventScope, callId: String, actionKey: String): UserInteractionState {
+        declined[scope]?.get(actionKey)?.let { return it }
+        val request = pending[scope]
+        if (request?.callId == callId && request.actionKey == actionKey) {
+            if (!request.approved) return UserInteractionState.PENDING
             pending.remove(scope)
-            return false
+            return UserInteractionState.RESOLVED
         }
-        pending[scope] = request.copy(authorized = true)
-        return true
+        pending[scope] = Request(callId, actionKey, nowMs() + windowMs)
+        return UserInteractionState.PENDING
     }
 
     @Synchronized
-    fun consumeOrRequest(scope: TurnEventScope, actionKey: String): Boolean {
-        val now = nowMs()
-        pending.entries.removeAll { it.value.expiresAtMs < now }
-        val request = pending.remove(scope)
-        if (request?.authorized == true && request.actionKey == actionKey && request.expiresAtMs >= now) return true
-        pending[scope] = Pending(actionKey, now + windowMs)
-        return false
+    fun remainingMs(scope: TurnEventScope, callId: String): Long? =
+        pending[scope]?.takeIf { it.callId == callId && !it.approved }
+            ?.let { (it.expiresAtMs - nowMs()).coerceAtLeast(0L) }
+
+    @Synchronized
+    fun respond(scope: TurnEventScope, callId: String, allow: Boolean?): UserInteractionState? {
+        val request = pending[scope]?.takeIf { it.callId == callId && !it.approved } ?: return null
+        val state = when {
+            allow == null || nowMs() >= request.expiresAtMs -> UserInteractionState.EXPIRED
+            allow -> UserInteractionState.RESOLVED
+            else -> UserInteractionState.DENIED
+        }
+        if (state == UserInteractionState.RESOLVED) {
+            pending[scope] = request.copy(approved = true)
+        } else {
+            pending.remove(scope)
+            declined.getOrPut(scope, ::mutableMapOf)[request.actionKey] = state
+        }
+        return state
     }
 
     @Synchronized
-    fun revoke(scope: TurnEventScope) { pending.remove(scope) }
+    fun revoke(scope: TurnEventScope) {
+        pending.remove(scope)
+        declined.remove(scope)
+    }
 }

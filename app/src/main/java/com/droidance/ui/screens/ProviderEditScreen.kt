@@ -345,7 +345,10 @@ fun ProviderEditScreen(
                     Spacer(modifier = Modifier.height(10.dp))
                 }
                 OutlinedButton(
-                    onClick = { showModelPicker = true },
+                    onClick = {
+                        viewModel.loadModelsOnOpen()
+                        showModelPicker = true
+                    },
                     modifier = Modifier.fillMaxWidth(),
                     shape = AppShapes.Control,
                     border = BorderStroke(1.dp, settingsHairline())

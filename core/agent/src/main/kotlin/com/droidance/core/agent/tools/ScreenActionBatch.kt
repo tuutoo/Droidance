@@ -38,7 +38,9 @@ data class MappedScreenAction(
     val targetX: Int? = null,
     val targetY: Int? = null,
     val actionIndex: Int = 0,
-    val focusFrom: Int? = null
+    val focusFrom: Int? = null,
+    /** Full control bounds in the decision frame's normalized coordinates, never a fresh frame. */
+    val gestureRegion: ModelCoordinateMapper.Bounds? = null
 ) {
     /**
      * A click executed right after another click in the same batch may first meet that click's
@@ -219,9 +221,32 @@ object ScreenActionBatchPlanner {
         } > 1) {
             return rejected("effect_key identifies one committing action; observe preparatory edits in an earlier call")
         }
+        val active = mapped.filter { it.operation !in setOf(ScreenBatchOperation.SCREENSHOT, ScreenBatchOperation.WAIT) }
+        // A drag-only batch names its exact defect so the same Agent can repair it in one step.
+        if (active.size > 1 && active.all { it.operation == ScreenBatchOperation.DRAG }) {
+            if (active.any { it.gestureRegion == null })
+                return rejected("action[${active.first().actionIndex - 1}] op=drag requires a new model observation before " +
+                    "further actions; only drags with a declared region on every control may share a batch")
+            active.firstOrNull { (Json.parseToJsonElement(it.argumentsJson).jsonObject.int("repeat") ?: 1) != 1 }?.let {
+                return rejected("action[${it.actionIndex - 1}] op=drag needs repeat=1 to share a drag-only batch")
+            }
+            if (active.size > policy.maxRegionalDrags)
+                return rejected("drag-only batch has ${active.size} drags; max_regional_drags=${policy.maxRegionalDrags}")
+            active.forEachIndexed { index, action ->
+                active.drop(index + 1).firstOrNull { other -> overlaps(checkNotNull(action.gestureRegion),
+                    checkNotNull(other.gestureRegion)) }?.let { other ->
+                    return rejected("action[${action.actionIndex - 1}] and action[${other.actionIndex - 1}] " +
+                        "regions overlap; regional drags need non-overlapping regions")
+                }
+            }
+        }
+        val independentRegions = active.size in 2..policy.maxRegionalDrags && active.all {
+            it.operation == ScreenBatchOperation.DRAG && it.gestureRegion != null
+        }
         mapped.forEachIndexed { index, action ->
             if (action.operation.name.lowercase() in policy.decisionBoundaryOperations &&
-                mapped.drop(index + 1).any { it.operation !in setOf(ScreenBatchOperation.SCREENSHOT, ScreenBatchOperation.WAIT) }) {
+                mapped.drop(index + 1).any { it.operation !in setOf(ScreenBatchOperation.SCREENSHOT, ScreenBatchOperation.WAIT) } &&
+                !(action.operation == ScreenBatchOperation.DRAG && independentRegions)) {
                 return rejected("action[$index] op=${action.sourceOperation} requires a new model observation before further actions")
             }
         }
@@ -277,6 +302,9 @@ object ScreenActionBatchPlanner {
         }
 
     private const val DEFAULT_COLLECT_PAGES = 3
+
+    private fun overlaps(a: ModelCoordinateMapper.Bounds, b: ModelCoordinateMapper.Bounds): Boolean =
+        !(a.right < b.left || b.right < a.left || a.bottom < b.top || b.bottom < a.top)
 
     /** The exact field and value let the same Agent repair a rejected batch in one step. */
     private class InvalidActionArgument(message: String) : Exception(message)
@@ -394,7 +422,18 @@ object ScreenActionBatchPlanner {
             }.toString(), waitMs)
         }
         "swipe", "drag", "path" -> {
-            val payload = action.filterKeys { it != "op" }
+            // Region is a precondition owned by the batch, not a touch-driver argument.
+            val payload = action.filterKeys { it != "op" && it != "region" }
+            val region = action["region"]?.let { value ->
+                val bounds = value as? JsonObject ?: invalid("region must be an object")
+                if (bounds.keys != setOf("left", "top", "right", "bottom"))
+                    invalid("region requires exactly left, top, right and bottom")
+                ModelCoordinateMapper.Bounds(bounds.normalized("left")!!, bounds.normalized("top")!!,
+                    bounds.normalized("right")!!, bounds.normalized("bottom")!!).also {
+                    if (it.left >= it.right || it.top >= it.bottom)
+                        invalid("region requires left < right and top < bottom")
+                }
+            }
             if (type == "drag" && "repeat" in action) {
                 val repeat = action.int("repeat") ?: invalid("repeat must be an integer")
                 if (repeat !in 1..policy.maxDragRepeat) invalid("repeat=$repeat is outside 1..${policy.maxDragRepeat}")
@@ -412,12 +451,22 @@ object ScreenActionBatchPlanner {
             } else listOf("startX", "startY", "endX", "endY").forEach {
                 action.normalized(it) ?: invalid("$it is required")
             }
+            if (region != null) {
+                listOf("startX", "endX").firstOrNull { checkNotNull(action.int(it)) !in region.left..region.right }?.let {
+                    invalid("$it=${action.int(it)} is outside region left..right ${region.left}..${region.right}; " +
+                        "drag endpoints must stay inside region")
+                }
+                listOf("startY", "endY").firstOrNull { checkNotNull(action.int(it)) !in region.top..region.bottom }?.let {
+                    invalid("$it=${action.int(it)} is outside region top..bottom ${region.top}..${region.bottom}; " +
+                        "drag endpoints must stay inside region")
+                }
+            }
             val operation = when (type) {
                 "swipe" -> ScreenBatchOperation.SWIPE
                 "drag" -> ScreenBatchOperation.DRAG
                 else -> ScreenBatchOperation.PATH
             }
-            MappedScreenAction(type, operation, JsonObject(payload).toString())
+            MappedScreenAction(type, operation, JsonObject(payload).toString(), gestureRegion = region)
         }
         "screenshot" -> MappedScreenAction(type, ScreenBatchOperation.SCREENSHOT, "{}")
             else -> invalid("is not supported")
@@ -659,6 +708,17 @@ class ScreenActionBatchExecutor(
             }
             completed += attempted
             recordProgress(index + 1)
+            if (action.operation == ScreenBatchOperation.TYPE_TEXT &&
+                result.metrics["text_input_current_editor_readback_verified"] != 1L &&
+                actions.drop(index + 1).any {
+                    it.operation !in setOf(ScreenBatchOperation.SCREENSHOT, ScreenBatchOperation.WAIT)
+                }) {
+                // Preserve the delivered input as completed. A fresh view must precede any later
+                // action when the runtime could not read the requested text back from the editor.
+                return ToolProtocolResult.failed("BATCH_TEXT_READBACK_REQUIRED", true, details = progressDetails(
+                    actions, completed, null, actions.drop(index + 1), "TEXT_READBACK_REQUIRED"
+                )).withProgress(actions.size, completed.size, index + 1)
+            }
         }
         return (lastActionResult ?: ToolProtocolResult.success("")).copy(outputText =
             "[SCREEN_ACT_BATCH_COMPLETED] completed=" + actions.size + "/" + actions.size +

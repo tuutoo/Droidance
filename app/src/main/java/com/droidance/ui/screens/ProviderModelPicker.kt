@@ -87,7 +87,10 @@ internal fun ProviderModelPicker(
             ) {
                 Text(stringResource(R.string.provider_models_select), style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f))
-                IconButton(onClick = onRefresh, enabled = !catalog.loading) {
+                IconButton(onClick = {
+                    search = ""
+                    onRefresh()
+                }, enabled = !catalog.loading) {
                     if (catalog.loading) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                     else Icon(DroidanceIcons.Refresh, contentDescription = stringResource(R.string.provider_models_refresh))
                 }

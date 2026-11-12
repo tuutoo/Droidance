@@ -18,6 +18,20 @@ object PreActionFreshness {
         val allowed: Boolean
     )
 
+    /** A declared region must itself match; never widen it or fall back to the whole frame. */
+    fun decideRegion(
+        reference: ObservationPixelReference,
+        width: Int,
+        height: Int,
+        pixelAt: (Int, Int) -> Int,
+        bounds: IntArray,
+        channelDelta: Int
+    ): Decision {
+        val whole = ObservationPixelComparator.compare(reference, width, height, pixelAt, channelDelta)
+        val local = ObservationPixelComparator.compareTarget(reference, width, height, pixelAt, bounds, channelDelta)
+        return Decision(whole, local, local != null && local.changedPixels == 0)
+    }
+
     fun decide(
         reference: ObservationPixelReference,
         width: Int,

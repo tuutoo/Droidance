@@ -15,6 +15,8 @@ enum class UserInteractionKind {
 enum class UserInteractionState {
     PENDING,
     RESOLVED,
+    DENIED,
+    EXPIRED,
     CANCELED
 }
 
@@ -31,5 +33,7 @@ data class UserInteractionRequest(
     val requestedAtMs: Long,
     val state: UserInteractionState = UserInteractionState.PENDING,
     val responseSource: UserInteractionResponseSource? = null,
-    val resolvedAtMs: Long? = null
+    val resolvedAtMs: Long? = null,
+    val turnId: String? = null,
+    val toolName: String? = null
 )

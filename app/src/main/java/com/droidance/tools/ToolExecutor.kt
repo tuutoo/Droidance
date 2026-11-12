@@ -27,6 +27,8 @@ import com.droidance.core.agent.event.ToolBinding
 import com.droidance.core.device.debug.DiagnosticsCollector
 import com.droidance.debug.ExecutionPathClassifier
 import com.droidance.core.model.llm.models.ToolCall
+import com.droidance.core.agent.UserInteractionState
+import com.droidance.core.agent.event.TurnEventScope
 import com.droidance.core.model.llm.models.ToolDefinition
 import com.droidance.settings.ExecutionSettingsRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -297,6 +299,17 @@ class ToolExecutor @Inject constructor(
         binding = ToolBinding.TURN_LOCAL
     )
 
+    override suspend fun awaitToolConfirmation(toolCall: ToolCall, result: ToolExecutionResult): ToolExecutionResult? {
+        if (result.diagnosticCode != ToolRiskPolicy.CONFIRMATION_REQUIRED) return result
+        val turn = toolTurnServices.requireCurrent()
+        val scope = TurnEventScope(turn.sessionContext.threadId, turn.sessionContext.turnId)
+        return when (val response = turn.interaction.awaitHighRiskConfirmation(scope, toolCall.id, toolCall.name)) {
+            UserInteractionState.RESOLVED -> null
+            UserInteractionState.CANCELED -> ToolProtocolResult.notExecuted("USER_CONTEXT_CHANGED", retryable = true)
+            else -> ToolRiskPolicy.confirmationRejection(response)
+        }
+    }
+
     private suspend fun execute(
         toolCall: ToolCall,
         autoCaptureAfterTool: Boolean,
@@ -462,12 +475,13 @@ class ToolExecutor @Inject constructor(
                 toolName = toolCall.name,
                 arguments = toolCall.arguments,
                 policy = ruleConfigManager.harnessPolicy().toolSafety,
-                scope = com.droidance.core.agent.event.TurnEventScope(
-                    turnBinding.sessionContext.threadId, turnBinding.sessionContext.turnId)
+                scope = TurnEventScope(turnBinding.sessionContext.threadId, turnBinding.sessionContext.turnId),
+                callId = eventToolCallId
             )
             if (!riskDecision.allowed) {
+                val rejection = checkNotNull(riskDecision.rejection)
                 if (riskDecision.requiresConfirmation) {
-                    turnBinding.interaction.requestHighRiskConfirmation(riskDecision.reason)
+                    return rejection
                 }
                 val durationMs = System.currentTimeMillis() - started
                 timingRecorder.record(
@@ -476,7 +490,7 @@ class ToolExecutor @Inject constructor(
                     success = false,
                     detail = riskDecision.reason
                 )
-                return finishEvent(checkNotNull(riskDecision.rejection))
+                return finishEvent(rejection)
             }
             turnBinding.progress.updateCurrentToolDetail(toolCall.name, toolCall.arguments)
             val executionPath = ExecutionPathClassifier.classify(toolCall.name, toolCall.arguments)
@@ -1298,7 +1312,8 @@ class ToolExecutor @Inject constructor(
         return readiness.copy(elapsedMs = SystemClock.elapsedRealtime() - started)
     }
 
-    private suspend fun executeRepeatedDrag(arguments: String, touchInput: TouchInputService): ToolExecutionResult {
+    private suspend fun executeRepeatedDrag(arguments: String, touchInput: TouchInputService,
+                                          region: ModelCoordinateMapper.Bounds? = null): ToolExecutionResult {
         val action = runCatching { Json.parseToJsonElement(arguments).jsonObject }.getOrNull()
             ?: return ToolProtocolResult.invalidArguments()
         val repeat = if ("repeat" in action) (action["repeat"] as? JsonPrimitive)
@@ -1335,7 +1350,13 @@ class ToolExecutor @Inject constructor(
                 }
             },
             drag = {
-                touchInput.path(primitive, drag = true, observeAfter = false).also {
+                // The baseline capture can take time. Recheck a declared control immediately before
+                // dispatch as well, without adopting that runtime frame as new model grounding.
+                val check = region?.let { observationSession.checkPreActionObservation(
+                    execution, usePendingTarget = false, targetRegion = it) }
+                (check?.rejection ?: touchInput.path(primitive, drag = true, observeAfter = false)).let {
+                    it.copy(metrics = it.metrics + check?.metrics.orEmpty())
+                }.also {
                     progress?.lastActionEndedAtElapsedMs = SystemClock.elapsedRealtime()
                 }
             },
@@ -1451,7 +1472,8 @@ class ToolExecutor @Inject constructor(
                             targetX = click?.x ?: mappedAction.targetX,
                             targetY = click?.y ?: mappedAction.targetY,
                             usePendingTarget = false,
-                            surfaceGesture = operation in VIEWPORT_GESTURES
+                            surfaceGesture = operation in VIEWPORT_GESTURES,
+                            targetRegion = mappedAction.gestureRegion
                         )
                         var observationCheck = checkTarget()
                         // A click delivered just before in this batch can leave its press feedback on or
@@ -1483,7 +1505,7 @@ class ToolExecutor @Inject constructor(
                                 touchInput.click(click.arguments, observeAfter = false)
                             }
                             ScreenBatchOperation.SWIPE -> touchInput.swipe(payload, observeAfter = false)
-                            ScreenBatchOperation.DRAG -> executeRepeatedDrag(payload, touchInput)
+                            ScreenBatchOperation.DRAG -> executeRepeatedDrag(payload, touchInput, mappedAction.gestureRegion)
                             ScreenBatchOperation.PATH -> touchInput.path(payload, drag = false, observeAfter = false)
                             ScreenBatchOperation.TYPE_TEXT -> if (usesFocus &&
                                 (focusTarget == null || focusActionIndex != mappedAction.focusFrom)) {

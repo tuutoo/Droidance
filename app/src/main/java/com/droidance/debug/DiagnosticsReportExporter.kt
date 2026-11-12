@@ -32,6 +32,7 @@ class DiagnosticsReportExporter @Inject constructor(
     suspend fun export(): File {
         val shareDir = File(context.cacheDir, "share")
         if (!shareDir.isDirectory && !shareDir.mkdirs()) throw IOException("Diagnostics directory is unavailable")
+        com.droidance.agent.cleanExportCache(context.cacheDir, System.currentTimeMillis(), com.droidance.agent.RuntimeCachePolicy())
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
         val file = File(shareDir, "Droidance-diagnostics-$timestamp.zip")
         val steps = RedactedDiagnostics.events(events.exportSnapshot())

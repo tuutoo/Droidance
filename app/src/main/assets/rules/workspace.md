@@ -5,7 +5,7 @@ Optional durable UTF-8 files for this task. Use list/read/write/append/edit and 
 
 The active file is attached with contentRef, totalChars, nextOffset and hasMore. Read missing sections when needed. edit requires path, old_text, replacement text and expected_ref from the inspected version; on a conflict read the current version first. Append additions or edit a correction rather than rewriting the entire record after every action.
 
-Captured images remain working evidence across calls under capture_history. Analyze them together and deliver directly; a workspace file or structured-object write is not required. Use records only when external memory helps longer work. A progress sentence is not a substitute for source evidence.
+Captured images remain working evidence across calls under capture_history. Follow collection_contract to carry findings across views. A progress sentence is not a substitute for source evidence.
 
 objects reads the complete cumulative structured-object collection (screen_evidence and successful records writes) without device access. Omit record_ids for its full object index, or use record_ids=["exact-id", ...] for full cumulative records. Results carry paginated JSON text, total_objects, total_chars, next_offset, has_more and through_sequence. Keep through_sequence and the same record_ids across pages, then assemble the text if needed. The continuation context includes every retained object with its full fields and sources, plus the complete index. Object records are not clipped to a character budget. Explicit workspace reads remain paginated. journal locates prior observations, progress and receipts; keep through_sequence across pages. artifact retrieves retained originals. Use complete records already present in model_authored_objects directly. For a historical snapshot or specifically requested records, read all needed record_ids together in one call; do not page the index merely to rediscover known IDs. Retrieve originals only for a concrete unread or conflicting field, not to reconfirm an unchanged saved value. For requested reports, write the file and attach it through completion deliverables with result_index; the runtime creates its versioned link.
 
@@ -17,11 +17,11 @@ help(ref="tool_name") returns that tool's full definition without device access 
 {"maxFiles":64,"maxFileChars":65536,"maxRetainedBytes":4194304,"pageChars":12000}
 
 ## collection_contract
-Retained page images can be the complete working source: analyze capture_history together and deliver directly. Records, object-index reads and file writes are optional memory for long work unless the user requests a file.
+For consecutive list entries, prefer one collect group over separate scroll rounds when the next page needs no decision. Choose pages from the remaining requested range, visible row count and shared capture_batch_budget. Keep views overlapping and check continuity. Read the group together and deliver when coverage is sufficient.
 
-When useful, attach screen_evidence deltas to screen_act or workspace: stable record_id, fields keyed by name as {value, source_ref, region?}, and uncertainties beside fields. Exact-ID updates preserve omitted fields. A rejected note never erases images or device effects and must not block delivery.
+Before another capture group, carry newly read fields, list order and sources in screen_evidence on that call. Reuse recorded items when counting unique entries. Keep stable record_id, values with units, source_ref and region if needed. Separate uncertainty and inference from values. Exact-ID updates preserve omitted fields. Skip separate note-taking rounds.
 
-Use model_authored_objects directly when present. Retrieve missing records with workspace(op="objects", record_ids=[...]) or originals with workspace(op="artifact", ref=...). Save requested files through workspace and attach them through completion deliverables.
+Reuse model_authored_objects; retrieve missing records with workspace(op="objects", record_ids=[...]). Fetch specific originals with workspace(op="artifact", ref=...) for gaps or conflicts, including omitted_images. A rejected note leaves originals and effects intact. Save requested files through workspace and attach them through completion deliverables.
 
 ## context_policy
 {"maxActiveChars":16000,"deviceChangesBeforeReview":999,"browsingOperations":{"screen_act":["scroll","swipe"]}}

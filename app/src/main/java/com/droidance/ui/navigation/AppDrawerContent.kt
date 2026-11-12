@@ -58,6 +58,7 @@ internal fun AppDrawerContent(
     updateVm: UpdateViewModel = hiltViewModel()
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
+    val repositoryUrl = stringResource(R.string.settings_repository_url)
     val availableRelease by updateVm.availableRelease.collectAsStateWithLifecycle()
     // A closed drawer must not replay all retained conversations during chat restoration.
     val historySnapshot by if (visible) vm.historySnapshot.collectAsStateWithLifecycle()
@@ -265,7 +266,7 @@ internal fun AppDrawerContent(
                 onClick = {
                     val intent = android.content.Intent(
                         android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://github.com/YbbLab/Droidance")
+                        android.net.Uri.parse(repositoryUrl)
                     ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     runCatching { context.startActivity(intent) }
                 },

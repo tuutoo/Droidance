@@ -36,6 +36,7 @@ import com.droidance.memory.ProgressiveMemoryContextProjector
 import com.droidance.memory.SessionIndex
 import com.droidance.core.knowledge.memory.TurnMemoryCandidateProjector
 import com.droidance.daemon.TaskExecutionService
+import com.droidance.runtime.RuntimeNotifications
 import com.droidance.tools.ToolExecutor
 import com.droidance.core.agent.tools.OperatorToolProfile
 import com.droidance.tools.ToolRiskPolicy
@@ -58,6 +59,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -104,6 +106,7 @@ class AgentRuntime @Inject constructor(
     private val taskLifecycle: TaskLifecycle,
     private val conversationHistoryReader: ConversationHistoryReader,
     private val eventStore: AgentEventStore,
+    private val cacheMaintenance: RuntimeCacheMaintenance,
     private val appTakeoverStore: AppTakeoverStore,
     private val appTakeoverPromptBuilder: com.droidance.automation.AppTakeoverPromptBuilder,
     private val processRecoveryCoordinator: AgentProcessRecoveryCoordinator,
@@ -172,6 +175,7 @@ class AgentRuntime @Inject constructor(
             agentTurnLedger.recordUserSteer(activeTurn, messageId,
                 listOf(text, selections).filter(String::isNotBlank).joinToString("\n\n"), images)
             pendingUserSteer.set(true)
+            cancelPendingUserInteraction(UserInteractionKind.HIGH_RISK_CONFIRMATION)
             // Finish an in-flight call, then discard its unexecuted plan at the next boundary.
             // Cancelling the Provider here also cancelled Phase A and surfaced a false task failure.
             debugLogManager.appendEvent("User steer persisted for the active Agent boundary")
@@ -331,6 +335,9 @@ class AgentRuntime @Inject constructor(
 
     @Synchronized
     private fun pauseForManualControl(reason: String) {
+        if (!_isPaused.value && _userInteractionRequest.value?.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION) {
+            _userInteractionRequest.value = null
+        }
         activeDurableTurn?.executionClock?.pause()
         if (_agentLoopState.value != AgentLoopState.COMPLETED) {
             _agentLoopState.value = AgentLoopState.WAITING_HUMAN
@@ -346,10 +353,7 @@ class AgentRuntime @Inject constructor(
     }
 
     /** Agent 确实需要用户介入时才发布接管请求；用户主动暂停不走此入口。 */
-    private fun requestManualTakeover(
-        reason: String,
-        kind: UserInteractionKind = UserInteractionKind.DEVICE_TAKEOVER
-    ): Boolean {
+    private fun requestManualTakeover(reason: String): Boolean {
         val firstRequest = !_manualTakeoverAvailable.value
         pauseForManualControl(reason)
         _manualTakeoverAvailable.value = true
@@ -357,7 +361,7 @@ class AgentRuntime @Inject constructor(
             val request = UserInteractionRequest(
                 requestId = UUID.randomUUID().toString(),
                 conversationId = currentConversationId.value,
-                kind = kind,
+                kind = UserInteractionKind.DEVICE_TAKEOVER,
                 reason = reason.trim(),
                 requestedAtMs = System.currentTimeMillis()
             )
@@ -367,9 +371,96 @@ class AgentRuntime @Inject constructor(
         return firstRequest
     }
 
-    /** A destructive call can only be authorized by the explicit local resume control. */
-    override fun requestHighRiskConfirmation(reason: String) {
-        requestManualTakeover(reason, UserInteractionKind.HIGH_RISK_CONFIRMATION)
+    override suspend fun awaitHighRiskConfirmation(
+        scope: TurnEventScope,
+        callId: String,
+        toolName: String
+    ): UserInteractionState {
+        val active = activeDurableTurn?.takeIf { it.scope == scope } ?: return UserInteractionState.CANCELED
+        val request = UserInteractionRequest(
+            requestId = callId,
+            conversationId = scope.threadId,
+            kind = UserInteractionKind.HIGH_RISK_CONFIRMATION,
+            reason = "",
+            requestedAtMs = System.currentTimeMillis(),
+            turnId = scope.turnId,
+            toolName = toolName
+        )
+        val waitingText = runtimeStatusText(R.string.tool_confirmation_waiting)
+        synchronized(this) {
+            if (activeDurableTurn !== active || _isPaused.value || pendingUserSteer.get() || cancelRequested) {
+                return UserInteractionState.CANCELED
+            }
+            active.executionClock.pause()
+            _agentLoopState.value = AgentLoopState.WAITING_HUMAN
+            _userInteractionRequest.value = request
+            _currentAction.value = waitingText
+            _streamingOutput.value = waitingText
+            _currentActionDetail.value = ""
+            _isPaused.value = true
+        }
+        try {
+            agentTurnLedger.pauseForUser(active, callId)
+            RuntimeNotifications.post(
+                androidx.core.content.ContextCompat.getContextForLanguage(appContext),
+                TaskExecutionService.MANUAL_TAKEOVER_NOTIFICATION_ID,
+                R.string.tool_confirmation_waiting,
+                runtimeStatusText(R.string.tool_confirmation_notification_text)
+            )
+            val remainingMs = ToolRiskPolicy.remainingConfirmationMs(scope, callId) ?: 0L
+            val response = withTimeoutOrNull(remainingMs) {
+                _userInteractionRequest.first { it?.requestId != callId || it.state != UserInteractionState.PENDING }
+            }?.takeIf { it.requestId == callId }?.state
+                ?: finishHighRiskConfirmation(scope, callId, allow = null)
+                ?: UserInteractionState.CANCELED
+            agentTurnLedger.resumeFromUser(active, callId)
+            return if (pendingUserSteer.get()) UserInteractionState.CANCELED else response
+        } finally {
+            synchronized(this) {
+                if (activeDurableTurn === active && _userInteractionRequest.value?.requestId == callId) {
+                    cancelPendingUserInteraction(UserInteractionKind.HIGH_RISK_CONFIRMATION)
+                    if (!cancelRequested && _isPaused.value) {
+                        _agentLoopState.value = AgentLoopState.PHASE_B
+                        _currentAction.value = ""
+                        _streamingOutput.value = ""
+                        active.executionClock.resume()
+                        _isPaused.value = false
+                    }
+                }
+            }
+            TaskExecutionService.cancelManualTakeover(appContext)
+        }
+    }
+
+    fun respondToHighRiskConfirmation(requestId: String, allow: Boolean) {
+        if (!processClient.isOwner) {
+            processClient.send("respondToHighRiskConfirmation", android.os.Bundle().apply {
+                putString("requestId", requestId)
+                putBoolean("allow", allow)
+            })
+            return
+        }
+        val scope = activeDurableTurn?.scope ?: return
+        finishHighRiskConfirmation(scope, requestId, allow)
+    }
+
+    @Synchronized
+    private fun finishHighRiskConfirmation(scope: TurnEventScope, requestId: String, allow: Boolean?): UserInteractionState? {
+        if (activeDurableTurn?.scope != scope || cancelRequested) return null
+        val request = _userInteractionRequest.value?.takeIf {
+            it.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION && it.requestId == requestId &&
+                it.turnId == scope.turnId && it.conversationId == scope.threadId
+        } ?: return null
+        if (request.state != UserInteractionState.PENDING) return request.state
+        val state = ToolRiskPolicy.respondToConfirmation(scope, requestId, allow) ?: UserInteractionState.CANCELED
+        _userInteractionRequest.value = request.copy(
+            state = state,
+            responseSource = if (state == UserInteractionState.EXPIRED || allow == null) {
+                UserInteractionResponseSource.RUNTIME
+            } else UserInteractionResponseSource.LOCAL_DEVICE,
+            resolvedAtMs = System.currentTimeMillis()
+        )
+        return state
     }
 
     /** Publish the model explanation and request local device assistance. */
@@ -478,9 +569,10 @@ class AgentRuntime @Inject constructor(
         _manualTakeoverAvailable.value = false
     }
 
-    private fun cancelPendingUserInteraction() {
+    @Synchronized
+    private fun cancelPendingUserInteraction(kind: UserInteractionKind? = null) {
         val pending = _userInteractionRequest.value
-            ?.takeIf { it.state == UserInteractionState.PENDING }
+            ?.takeIf { it.state == UserInteractionState.PENDING && (kind == null || it.kind == kind) }
             ?: return
         val canceled = pending.copy(
             state = UserInteractionState.CANCELED,
@@ -622,14 +714,13 @@ class AgentRuntime @Inject constructor(
     fun resumeManualTakeover(): Boolean {
         if (!processClient.isOwner) return processClient.command("resume", android.os.Bundle().apply {  }).getBoolean("result")
         if (!_isPaused.value) return false
-        val pendingRequest = _userInteractionRequest.value
+        val interaction = _userInteractionRequest.value
+        if (interaction?.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION &&
+            _manualTakeoverState.value == ManualTakeoverState.RUNNING
+        ) return false
+        val pendingRequest = interaction
             ?.takeIf { it.state == UserInteractionState.PENDING }
         if (pendingRequest?.kind == UserInteractionKind.PERMISSION) return false
-        if (pendingRequest?.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION &&
-            !(activeDurableTurn?.scope?.let(ToolRiskPolicy::confirmNextHighRisk) ?: false)
-        ) {
-            return false
-        }
         _manualTakeoverState.value = ManualTakeoverState.RESUMING
         manualTakeoverResumedAtElapsedMs = android.os.SystemClock.elapsedRealtime()
         manualResumeRequiresObservation = true
@@ -1065,6 +1156,7 @@ class AgentRuntime @Inject constructor(
                                     toolServicesBinding?.let(toolTurnServices::release)
                                 }
                             } finally {
+                                durableTurn?.scope?.let(ToolRiskPolicy::revoke)
                                 if (activeDurableTurn === durableTurn) activeDurableTurn = null
                                 if (activationKind == TurnActivationKind.DIRECT || activationKind == TurnActivationKind.LOCAL) {
                                     _isMobileUseTaskActive.value = false
@@ -1379,8 +1471,10 @@ class AgentRuntime @Inject constructor(
                     }
                 }
             } finally {
-                if (currentJob != null) {
-                    unregisterActiveJob(runtimeTaskId, currentJob)
+                try {
+                    cacheMaintenance.afterTask()
+                } finally {
+                    if (currentJob != null) unregisterActiveJob(runtimeTaskId, currentJob)
                 }
             }
         }
@@ -1694,6 +1788,8 @@ host = object : com.droidance.core.agent.TurnHost {
         } catch (error: Exception) {
             debugLogManager.appendEvent("Background skill draft failed: ${error.javaClass.simpleName}")
             throw error
+        } finally {
+            cacheMaintenance.afterTask()
         }
     }
 

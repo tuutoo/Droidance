@@ -11,6 +11,8 @@ import com.droidance.tools.*
 
 import com.droidance.core.knowledge.memory.DurableMemoryApplyResult
 import com.droidance.core.knowledge.memory.DurableMemoryUpdate
+import com.droidance.core.agent.UserInteractionState
+import com.droidance.core.agent.event.TurnEventScope
 import com.droidance.core.device.permission.PendingPermissionRequest
 import com.droidance.core.device.permission.PermissionRequestOutcome
 import javax.inject.Inject
@@ -33,7 +35,7 @@ fun interface ToolCompletionPort {
 }
 
 interface ToolInteractionPort {
-    fun requestHighRiskConfirmation(reason: String)
+    suspend fun awaitHighRiskConfirmation(scope: TurnEventScope, callId: String, toolName: String): UserInteractionState
     fun requestManualAssistance(reason: String, instruction: String?)
     suspend fun beginRuntimePermissionRequest(request: PendingPermissionRequest)
     suspend fun resolveRuntimePermissionRequest(request: PendingPermissionRequest, outcome: PermissionRequestOutcome)

@@ -267,6 +267,10 @@ object RuntimeProcessHost {
                 "cancel" -> { runtime.cancelCurrentTask(values.getString("taskId"), values.getString("origin") ?: "user"); Bundle() }
                 "pause" -> { runtime.togglePause(); Bundle() }
                 "resume" -> Bundle().apply { putBoolean("result", runtime.resumeManualTakeover()) }
+                "respondToHighRiskConfirmation" -> {
+                    runtime.respondToHighRiskConfirmation(requireNotNull(values.getString("requestId")), values.getBoolean("allow"))
+                    Bundle()
+                }
                 "takeControl" -> Bundle().apply { putBoolean("result", runtime.beginManualTakeoverFromOverlay()) }
                 "stopResidency" -> Bundle().apply { putBoolean("result", runtime.stopAppTakeoverResidency(values.getString("origin") ?: "user")) }
                 "refreshResidency" -> { runtime.refreshAppTakeoverResidency(); Bundle() }
@@ -512,6 +516,7 @@ object RuntimeProcessHost {
                 putString("kind", request.kind.name); putString("reason", request.reason); putLong("at", request.requestedAtMs)
                 putString("state", request.state.name); putString("source", request.responseSource?.name)
                 request.resolvedAtMs?.let { putLong("resolved", it) }
+                putString("turnId", request.turnId); putString("toolName", request.toolName)
             }) }
             entry.virtualSpace().activeDisplayMetrics()?.let { metrics -> putBundle("display", Bundle().apply {
                 entry.virtualSpace().retainedExecution.value?.let { execution ->

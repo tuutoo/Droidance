@@ -16,7 +16,7 @@ object ScreenActionBatchProtocol {
         "press_key" to setOf("op", "key"),
         "scroll" to setOf("op", "direction", "amount", "speed", "region"),
         "swipe" to setOf("op", "startX", "startY", "endX", "endY", "duration"),
-        "drag" to setOf("op", "startX", "startY", "endX", "endY", "duration", "repeat"),
+        "drag" to setOf("op", "startX", "startY", "endX", "endY", "duration", "repeat", "region"),
         "path" to setOf("op", "points", "duration"),
         "wait" to setOf("op", "ms"),
         "screenshot" to setOf("op"),
@@ -39,7 +39,10 @@ object ScreenActionBatchProtocol {
         "direction" to ToolParameter("string", "Viewport direction: down reveals lower content (finger upward); up reveals higher content.", false, listOf("up", "down", "left", "right"), requiredWhen = mapOf("op" to listOf("scroll", "collect"))),
         "amount" to ToolParameter("string", "Scroll distance; defaults to medium.", false, listOf("small", "medium", "large", "full")),
         "speed" to ToolParameter("string", "Scroll speed; defaults to normal.", false, listOf("slow", "normal", "fast")),
-        "region" to ToolParameter("object", "Omit for normal full-page scrolling. Use normalized {left,top,right,bottom} only for a distinct nested or side-by-side pane in the current frame.", false),
+        "region" to ToolParameter("object", "Normalized bounds of an observed control or pane. For drag, enclose the whole control and both endpoints; independent non-overlapping regions can share a bounded drag-only batch. Runtime requires unchanged structured pixels in each region and the same foreground window. Omit for normal full-page scrolling.", false,
+            properties = listOf("left", "top", "right", "bottom").associateWith {
+                ToolParameter("integer", "Normalized bound, 0..1000.", true)
+            }, additionalProperties = false),
         "pages" to ToolParameter("integer", "Views op=collect captures, 2 to the capture limit; defaults to 3.", false),
         "ms" to ToolParameter("integer", "Bounded duration for op=wait; defaults to policy default_wait_ms.", false),
         "startX" to ToolParameter("integer", "Normalized gesture start X, 0..1000.", false, requiredWhen = mapOf("op" to listOf("swipe", "drag"))),

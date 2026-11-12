@@ -71,7 +71,7 @@ class UpdateDownloader internal constructor(
             tempFile = partialFile
             // Three direct attempts precede one bounded fallback. No geolocation is needed.
             // ghproxy.net links to the MIT-licensed hunshcn/gh-proxy project. Treat it as
-            // untrusted transport: the digest always comes from the direct GitHub API.
+            // untrusted transport: the digest always comes from the direct GitHub release manifest.
             val urls = List(3) { downloadUrl } + "https://ghproxy.net/$downloadUrl"
             for ((attempt, url) in urls.withIndex()) {
                 currentCoroutineContext().ensureActive()

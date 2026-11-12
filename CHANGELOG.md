@@ -8,6 +8,20 @@ Record a notable change in `Unreleased` within the same pull request that implem
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-11-12
+
+Refine multi-step screen actions, list collection, and date/time wheel controls.
+
+Improve waits after page transitions and feedback when actions need recovery.
+
+Allow slower models to begin responding within the request budget, and refresh model lists when opened.
+
+Confirm or decline actions directly in chat.
+
+Fix update checks and clean unused attachments and expired caches while preserving conversation screenshots.
+
+Make running-status text shimmer clearer in light and dark themes.
+
 ## [0.2.2] - 2026-11-09
 
 - Prevent background tasks from taking main-screen input focus on Android 14+.

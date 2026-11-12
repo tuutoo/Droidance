@@ -64,6 +64,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.droidance.R
 import com.droidance.config.TokenUsageTotals
+import com.droidance.core.agent.UserInteractionKind
+import com.droidance.core.agent.UserInteractionState
 import com.droidance.core.agent.event.AgentEventProjectionFailureSnapshot
 import com.droidance.ui.mascot.MascotStage
 import com.droidance.ui.mascot.MascotMood
@@ -116,7 +118,10 @@ internal fun HomeScreen(
     val queuedTurnIds by viewModel.queuedTurnIds.collectAsStateWithLifecycle()
     val currentAction by viewModel.currentAction.collectAsStateWithLifecycle()
     val isPaused by viewModel.isPaused.collectAsStateWithLifecycle()
-    val manualTakeoverReason by viewModel.manualTakeoverReason.collectAsStateWithLifecycle()
+    val userInteraction by viewModel.userInteraction.collectAsStateWithLifecycle()
+    val manualTakeoverReason = userInteraction?.takeIf {
+        it.kind == UserInteractionKind.DEVICE_TAKEOVER && it.state == UserInteractionState.PENDING
+    }?.reason.orEmpty()
     val pendingPermission by viewModel.pendingPermissionRequest.collectAsStateWithLifecycle()
     val retainedVirtualExecution by viewModel.retainedVirtualExecution.collectAsStateWithLifecycle()
     val retainedVirtualContent by viewModel.retainedVirtualContent.collectAsStateWithLifecycle()
@@ -345,7 +350,12 @@ internal fun HomeScreen(
                             onStop = viewModel::stopTask,
                             onExecutionLayoutChange = onExecutionLayoutChange,
                             pendingPermission = pendingPermission.takeIf { isStreaming && !isQueued },
-                            onRequestPermission = viewModel::requestRuntimePermission
+                            onRequestPermission = viewModel::requestRuntimePermission,
+                            toolConfirmation = userInteraction?.takeIf {
+                                it.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION && !message.isUser &&
+                                    message.isCurrentSegment && message.turnId == it.turnId && !isQueued
+                            },
+                            onToolConfirmation = viewModel::respondToToolConfirmation
                         )
                     }
 

@@ -23,30 +23,12 @@ data class AppReleaseInfo(
 )
 
 @Serializable
-internal data class GitHubReleaseDto(
-    @SerialName("tag_name") val tagName: String = "",
-    @SerialName("name") val name: String? = null,
-    @SerialName("published_at") val publishedAt: String? = null,
-    @SerialName("html_url") val htmlUrl: String? = null,
-    @SerialName("assets") val assets: List<GitHubAssetDto> = emptyList()
-)
-
-@Serializable
-internal data class GitHubAssetDto(
-    @SerialName("name") val name: String = "",
-    @SerialName("browser_download_url") val downloadUrl: String = "",
-    @SerialName("size") val size: Long = 0L,
-    @SerialName("content_type") val contentType: String? = null,
-    @SerialName("digest") val digest: String? = null
-)
-
-internal fun GitHubAssetDto.sha256Digest(): String? = digest
-    ?.removePrefix("sha256:")
-    ?.takeIf { digest?.startsWith("sha256:") == true && it.matches(Regex("[a-fA-F0-9]{64}")) }
-
-@Serializable
 internal data class ReleaseMetadataDto(
     val tag: String,
+    @SerialName("version_name") val versionName: String,
+    @SerialName("package") val packageName: String,
     val apk: String,
+    @SerialName("size_bytes") val sizeBytes: Long,
+    val sha256: String,
     @SerialName("release_notes") val releaseNotes: Map<String, String>
 )

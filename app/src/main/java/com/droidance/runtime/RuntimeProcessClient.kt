@@ -242,7 +242,9 @@ class RuntimeProcessClient @Inject constructor(
                             UserInteractionKind.valueOf(it.getString("kind")!!), it.getString("reason")!!,
                             it.getLong("at"), UserInteractionState.valueOf(it.getString("state")!!),
                             it.getString("source")?.let(UserInteractionResponseSource::valueOf),
-                            if (it.containsKey("resolved")) it.getLong("resolved") else null)
+                            if (it.containsKey("resolved")) it.getLong("resolved") else null,
+                            turnId = it.getString("turnId"),
+                            toolName = it.getString("toolName"))
                     }
                     usage.value = Json.decodeFromString(snapshot.getString("usage")!!)
                     turnUsage.value = Json.decodeFromString(snapshot.getString("turnUsage")!!)

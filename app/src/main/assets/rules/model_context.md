@@ -1,7 +1,7 @@
 # Model context message templates
 
 ## task_entry
-Act on the original request and explicit updates. Ordinary text during execution is a brief live status. Deliver independently useful requested findings with report_result before substantial remaining work or a human handoff; the final answer then adds only what is new and does not restate them. Batch grounded controls and collect scrollable views under batch_contract; analyze retained captures together without per-page notes or verification rounds.
+Act on the original request and explicit updates. Ordinary text during execution is a brief live status. Use report_result for useful partial results before substantial remaining work or a human handoff. When the full answer is ready, submit it directly with done or present_result_card. Follow batch_contract for screen actions and collection_contract for findings across views.
 
 The latest message carries the current frame, runtime facts and working state; older images are historical and user instructions remain authoritative. Judge progress from the requested fields or target state, not from delivery or changed pixels. Request another observation only for a relevant changed state, an unread required value or conflicting evidence. Preserve completed batch effects and choose only remaining work.
 
@@ -18,7 +18,7 @@ Preloaded current Android ScreenState:
 Frame reference: {observationId}. The runtime retains this original image for later retrieval. Cite it when useful or requested; copying its reference is not a prerequisite for navigation or completion.
 
 ## current_screenshot
-Current Android UI screenshot; only this frame binds controls. Combine every action it already decides in one actions array: fill visible fields and submit together, and after a tap that opens an input page continue with untargeted type_text as batch_contract describes. Stop before controls a navigation will reveal and before choices that depend on unread results. Collection groups scroll the established viewport; read their pages together with capture_history. Finish the analysis from retained sources, qualifying unread values, instead of restarting exploration. Its observation_ref identifies the retained source.
+Current Android UI screenshot. Only this frame binds controls. Batch grounded actions, including an editor's focus tap, type_text and next independent visible control. Use collect for consecutive views under collection_contract. For wheel correction follow batch_contract. Stop for new readings or submission checks. The observation_ref identifies this frame.
 
 ## retained_findings
 These are source-linked observations previously written by this Agent. They preserve task memory across views, but may be mistaken or describe an earlier screen. Use the current frame for the next action and retrieve original sources when a value or conclusion needs verification. Source binding establishes provenance, not correctness.

@@ -358,9 +358,16 @@ internal suspend fun TaskTurnSession.runToolRound(modelRound: ModelRoundOutput):
                     }
                 }
             } else executeBoundTool()
-            return if (selectedByProviderOrder.values.any {
+            val isIntervention = selectedByProviderOrder.values.any {
                 it.providerCall.name == toolCall.name && it.contract.effect == ToolEffect.USER_INTERVENTION
-            }) executeTimed() else runInterruptibleTool { executeTimed() }
+            }
+            suspend fun executeOnce() = if (isIntervention) executeTimed() else runInterruptibleTool { executeTimed() }
+
+            val result = executeOnce()
+            // Waiting for the user is outside both the invocation timeout and the manual-pause watcher.
+            toolExecutor.awaitToolConfirmation(toolCall, result)?.let { return it }
+            checkTaskDeadline()
+            return executeOnce()
         }
         val durableScope = durableRound.scope
         var durableAttemptRunning = false

@@ -24,6 +24,33 @@ class FileBlobStore(rootDirectory: File, private val encodedCacheMaxBytes: Long 
 
     init { require(encodedCacheMaxBytes >= 0) }
 
+    fun clearEncodedCache() = synchronized(encodedCache) {
+        encodedCache.clear()
+        encodedCacheBytes = 0L
+    }
+
+    /** No writer may be active; these names never represent committed content references. */
+    internal fun removeAbandonedWrites(): Long = Files.list(blobDirectory).use { paths ->
+        paths.filter { Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS) &&
+            it.fileName.toString().let { name -> name.startsWith(".pending-") && name.endsWith(".blob") }
+        }.mapToLong { path -> val size = Files.size(path); if (Files.deleteIfExists(path)) size else 0L }.sum()
+    }
+
+    /** Discard only an exact diagnostic copy; export can reconstruct it from the retained blob. */
+    internal fun discardVerifiedDuplicate(contentRef: String, duplicate: File): Long {
+        val hash = hashFromContentRef(contentRef)
+        val source = targetFor(hash)
+        val destination = duplicate.toPath()
+        if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS) ||
+            !Files.isRegularFile(destination, LinkOption.NOFOLLOW_LINKS)) return 0L
+        if (Files.isSameFile(source, destination)) return 0L
+        val size = Files.size(source)
+        val metadata = BlobMetadata(contentRef, hash, size)
+        verify(source, metadata)
+        verify(destination, metadata)
+        return if (Files.deleteIfExists(destination)) size else 0L
+    }
+
     override fun readBase64(contentRef: String, maxBytes: Long): String {
         // Keep read limits, missing-file detection and SHA-256 verification on every read.
         // Only the derived encoding is reused; no filesystem freshness assumptions.

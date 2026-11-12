@@ -13,13 +13,24 @@ sealed interface UpdateCheckState {
     data object Idle : UpdateCheckState
     data object Checking : UpdateCheckState
     data class UpToDate(val checkedVersion: String) : UpdateCheckState
-    data class UpdateAvailable(val release: AppReleaseInfo, val currentVersion: String) : UpdateCheckState
-    data class CheckFailed(val reason: UpdateCheckError, val rawMessage: String? = null) : UpdateCheckState
+    data class UpdateAvailable(
+        val release: AppReleaseInfo,
+        val currentVersion: String,
+        val checkedAt: Long = 0,
+        val fromCache: Boolean = false
+    ) : UpdateCheckState
+    data class CheckFailed(
+        val reason: UpdateCheckError,
+        val rawMessage: String? = null,
+        val retryAt: Long = 0,
+        val lastSuccessfulCheckAt: Long = 0
+    ) : UpdateCheckState
 }
 
 enum class UpdateCheckError {
     NETWORK_ERROR,
     RATE_LIMITED,
+    ACCESS_DENIED,
     PARSE_ERROR,
     NO_RELEASE_FOUND,
     UNKNOWN

@@ -24,7 +24,7 @@ import javax.inject.Singleton
 
 internal const val AUTO_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000L
 
-/** A release found earlier survives restarts only as its version, so opening the app restores it. */
+/** A known update without a usable cached manifest needs a refresh when the app opens. */
 internal fun shouldAutoCheck(
     enabled: Boolean,
     elapsedSinceLastCheckMs: Long,
@@ -41,14 +41,14 @@ class AppUpdateManager @Inject constructor(
     private val notifier: UpdateNotifier,
     @ApplicationScope private val externalScope: CoroutineScope
 ) {
-    private val _checkState = MutableStateFlow<UpdateCheckState>(if (BuildConfig.UPDATE_REPOSITORY.isBlank()) UpdateCheckState.Disabled else UpdateCheckState.Idle)
+    private val _checkState = MutableStateFlow<UpdateCheckState>(if (BuildConfig.UPDATE_REPOSITORY.isBlank()) UpdateCheckState.Disabled else repository.restoredCheckState())
     val checkState: StateFlow<UpdateCheckState> = _checkState.asStateFlow()
 
     private val _downloadState = MutableStateFlow<DownloadProgressState>(DownloadProgressState.Idle)
     val downloadState: StateFlow<DownloadProgressState> = _downloadState.asStateFlow()
 
     /** Stays set through later checks so a failed check does not hide a known update. */
-    private val _availableRelease = MutableStateFlow<AppReleaseInfo?>(null)
+    private val _availableRelease = MutableStateFlow(repository.cachedRelease())
     val availableRelease: StateFlow<AppReleaseInfo?> = _availableRelease.asStateFlow()
 
     private val _dialogVisible = MutableStateFlow(false)
@@ -67,7 +67,8 @@ class AppUpdateManager @Inject constructor(
         val restoring = appOpen && _availableRelease.value == null && known.isNotEmpty() &&
             VersionComparator.isNewer(known, BuildConfig.VERSION_NAME)
         val elapsed = System.currentTimeMillis() - generalSettings.lastUpdateCheckTime()
-        if (shouldAutoCheck(generalSettings.autoCheckUpdate(), elapsed, restoring)) {
+        if (System.currentTimeMillis() >= repository.nextCheckAllowedAt() &&
+            shouldAutoCheck(generalSettings.autoCheckUpdate(), elapsed, restoring)) {
             checkForUpdates(force = false)
         }
     }

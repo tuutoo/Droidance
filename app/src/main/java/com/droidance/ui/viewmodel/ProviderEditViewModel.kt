@@ -228,6 +228,10 @@ class ProviderEditViewModel @Inject constructor(
 
     fun refreshModels() = fetchModels(delayMillis = 0, force = true)
 
+    fun loadModelsOnOpen() {
+        if (!_modelCatalog.value.loading) fetchModels(delayMillis = 0)
+    }
+
     private fun updateModelSource() {
         discoveryJob?.cancel()
         sourceGeneration++
@@ -243,7 +247,7 @@ class ProviderEditViewModel @Inject constructor(
         val generation = ++sourceGeneration
         val state = _uiState.value
         val preset = presetForAddress(state.baseUrl)
-        if (state.baseUrl.isBlank() || state.apiKey.isBlank()) {
+        if (state.baseUrl.isBlank()) {
             _modelCatalog.update { it.copy(loading = false, error = ModelCatalogError.MISSING_CONNECTION) }
             return
         }

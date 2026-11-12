@@ -44,6 +44,7 @@ class DebugExportManager @Inject constructor(
     suspend fun exportZip(): File {
         val shareDir = File(context.cacheDir, "share")
         if (!shareDir.isDirectory && !shareDir.mkdirs()) throw IOException("Debug export directory is unavailable")
+        com.droidance.agent.cleanExportCache(context.cacheDir, System.currentTimeMillis(), com.droidance.agent.RuntimeCachePolicy())
         val timestamp = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(Date())
         val stagingFile = File.createTempFile("Droidance-debug-$timestamp-", ".zip.partial", shareDir)
         val zipFile = File(shareDir, stagingFile.name.removeSuffix(".partial"))
@@ -82,7 +83,7 @@ class DebugExportManager @Inject constructor(
             diagnostics.writeSidecarEvidence(sidecarBridge.readSidecarEvidence())
 
             val root = File(fileManager.getDataDirPath())
-            DebugExportSources.withSources(root, context.cacheDir, snapshot) { supplements ->
+            DebugExportSources.withSources(root, context.cacheDir, snapshot, blobStore) { supplements ->
                 ZipOutputStream(stagingFile.outputStream().buffered()).use { zip ->
                     DebugArchiveWriter(blobStore).write(zip, snapshot, buildJsonObject {
                         put("exported_at", SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date()))

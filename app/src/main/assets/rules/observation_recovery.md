@@ -1,7 +1,7 @@
 # Observation recovery
 
 ## policy
-{"attempts":3,"maxCurrentFrameCrops":2,"maxFingerprintDistance":4,"historyLimit":32,"scopeHistoryLimit":8,"coordinateTolerance":30,"maxOscillationCycles":2,"refreshAfterTools":["wait"],"refreshAfterDiagnostics":["INPUT_DELIVERY_FAILED","OBSERVATION_RECOVERY_REQUIRED","PRE_ACTION_OBSERVATION_UNAVAILABLE","POST_ACTION_OBSERVATION_UNAVAILABLE","PRE_ACTION_OBSERVATION_CHANGED","STALE_OBSERVATION","COORDINATE_REFERENCE_STALE","CROP_CURRENT_FRAME_BUDGET_EXHAUSTED","BATCH_EXECUTION_SURFACE_CHANGED","VISIT_RETURN_NOT_CONFIRMED","BATCH_CAPTURE_UNAVAILABLE","BATCH_CAPTURE_FAILED","BATCH_INPUT_FOCUS_UNAVAILABLE","EXACT_ACTION_REPEATED","TEXT_INPUT_TARGET_FOCUS_UNVERIFIED","PRE_ACTION_TARGET_OCCLUDED"],"actions":{"wait":[],"screen_act:scroll":["op","direction","region"],"screen_act:click":["op","target_id","x","y"],"screen_act:swipe":["op","startX","startY","endX","endY"],"screen_act:type_text":["op","target_id","x","y","text","clear"],"screen_act:press_key":["op","key"]},"observationScopedActions":["screen_act:scroll"],"effectChangeFraction":0.002,"effectChannelDelta":24,"revisitSameFraction":0.0005,"revisitMinAppearances":3}
+{"attempts":3,"maxCurrentFrameCrops":2,"maxFingerprintDistance":4,"historyLimit":32,"scopeHistoryLimit":8,"coordinateTolerance":30,"maxOscillationCycles":2,"refreshAfterTools":["wait"],"refreshAfterDiagnostics":["INPUT_DELIVERY_FAILED","OBSERVATION_RECOVERY_REQUIRED","PRE_ACTION_OBSERVATION_UNAVAILABLE","POST_ACTION_OBSERVATION_UNAVAILABLE","PRE_ACTION_OBSERVATION_CHANGED","STALE_OBSERVATION","COORDINATE_REFERENCE_STALE","CROP_CURRENT_FRAME_BUDGET_EXHAUSTED","BATCH_EXECUTION_SURFACE_CHANGED","VISIT_RETURN_NOT_CONFIRMED","BATCH_CAPTURE_UNAVAILABLE","BATCH_CAPTURE_FAILED","BATCH_INPUT_FOCUS_UNAVAILABLE","EXACT_ACTION_REPEATED","TEXT_INPUT_TARGET_FOCUS_UNVERIFIED","PRE_ACTION_TARGET_OCCLUDED","DRAG_REPEAT_NO_CHANGE"],"actions":{"wait":[],"screen_act:scroll":["op","direction","region"],"screen_act:click":["op","target_id","x","y"],"screen_act:swipe":["op","startX","startY","endX","endY"],"screen_act:drag":["op","startX","startY","endX","endY"],"screen_act:type_text":["op","target_id","x","y","text","clear"],"screen_act:press_key":["op","key"]},"observationScopedActions":["screen_act:scroll"],"effectChangeFraction":0.002,"effectChannelDelta":24,"revisitSameFraction":0.0005,"revisitMinAppearances":3}
 
 ## feedback
 An explicit user stopping condition takes precedence: once reached, deliver the supported partial result and the unresolved work. Otherwise only this method is exhausted on this view, not the task. The blocked action was NOT executed.
@@ -30,16 +30,16 @@ Choose a materially different grounded method for the remaining requirement, or 
 
 
 ## gesture_capture_policy
-{"initialWaitMs":250,"timeoutMs":600,"intervalMs":120,"stableSamples":2,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0}
+{"initialWaitMs":250,"timeoutMs":600,"intervalMs":120,"stableSamples":2,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0,"minStableMs":120}
 
 ## drag_capture_policy
-{"initialWaitMs":150,"timeoutMs":1500,"intervalMs":100,"stableSamples":3,"pixelDelta":8,"changedFraction":0.001,"localizedMotionMaxFraction":0.0,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0}
+{"initialWaitMs":150,"timeoutMs":1500,"intervalMs":100,"stableSamples":3,"pixelDelta":8,"changedFraction":0.001,"localizedMotionMaxFraction":0.0,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0,"minStableMs":200}
 
 ## action_capture_policy
-{"initialWaitMs":350,"timeoutMs":800,"intervalMs":120,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":2500,"lateChangeProbeMs":600,"newViewChangedFraction":0.3,"quietViewChangedFraction":0.01}
+{"initialWaitMs":350,"timeoutMs":800,"intervalMs":120,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":2500,"lateChangeProbeMs":600,"newViewChangedFraction":0.3,"quietViewChangedFraction":0.01,"minStableMs":240}
 
 ## collection_capture_policy
-{"initialWaitMs":350,"timeoutMs":2000,"intervalMs":120,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0}
+{"initialWaitMs":350,"timeoutMs":2000,"intervalMs":120,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":1500,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0,"minStableMs":240}
 
 ## input_settle_policy
-{"initialWaitMs":0,"timeoutMs":1500,"intervalMs":100,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":0,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0}
+{"initialWaitMs":0,"timeoutMs":1500,"intervalMs":100,"stableSamples":3,"pixelDelta":8,"changedFraction":0.005,"localizedMotionMaxFraction":0.15,"localizedMotionSamples":3,"settleExtensionMs":0,"lateChangeProbeMs":0,"newViewChangedFraction":1.0,"quietViewChangedFraction":0.0,"minStableMs":200}

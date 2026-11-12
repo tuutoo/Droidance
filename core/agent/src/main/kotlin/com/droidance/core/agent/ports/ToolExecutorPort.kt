@@ -22,6 +22,8 @@ interface ToolExecutorPort {
                                   inventoryQuery: String?, maxChars: Int): String
     suspend fun execute(toolCall: ToolCall): ToolExecutionResult
     suspend fun executeTurnLocal(toolCall: ToolCall): ToolExecutionResult
+    /** Return the settled result, or null to dispatch this exact call once after approval. */
+    suspend fun awaitToolConfirmation(toolCall: ToolCall, result: ToolExecutionResult): ToolExecutionResult? = result
     fun getOperatorToolDefinitions(
         mode: RuntimeMode?,
         executionSpace: ExecutionSpace?,

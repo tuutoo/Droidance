@@ -19,8 +19,7 @@ import com.droidance.config.TokenUsageRepository
 import com.droidance.core.device.permission.PermissionBroker
 import com.droidance.ui.execution.PendingPermissionUiState
 import com.droidance.agent.AgentRuntime
-import com.droidance.core.agent.UserInteractionState
-import com.droidance.core.agent.UserInteractionKind
+import com.droidance.core.agent.UserInteractionRequest
 import com.droidance.core.agent.AgentState
 import com.droidance.core.agent.PublicAssistantText
 import com.droidance.core.agent.TurnRequest
@@ -208,8 +207,8 @@ class HomeViewModel @Inject constructor(
     /** 是否处于暂停状态（只反映本会话） */
     private val _isPaused = MutableStateFlow(false)
     val isPaused: StateFlow<Boolean> = _isPaused
-    private val _manualTakeoverReason = MutableStateFlow("")
-    val manualTakeoverReason: StateFlow<String> = _manualTakeoverReason
+    private val _userInteraction = MutableStateFlow<UserInteractionRequest?>(null)
+    val userInteraction: StateFlow<UserInteractionRequest?> = _userInteraction
     private val _pendingPermissionRequest = MutableStateFlow<PendingPermissionUiState?>(null)
     val pendingPermissionRequest: StateFlow<PendingPermissionUiState?> = _pendingPermissionRequest
 
@@ -239,6 +238,12 @@ class HomeViewModel @Inject constructor(
             context.startActivity(intent)
         } else {
             permissionBroker.requestSystemPermissionDialog(request.requestId)
+        }
+    }
+
+    fun respondToToolConfirmation(requestId: String, allow: Boolean) {
+        if (_userInteraction.value?.requestId == requestId) {
+            agentRuntime.respondToHighRiskConfirmation(requestId, allow)
         }
     }
 
@@ -413,14 +418,10 @@ class HomeViewModel @Inject constructor(
                 currentId == conversationId && paused
             }.collect { _isPaused.value = it }
         }
-        // Keep live recovery requests separate from accumulated assistant dialogue.
         viewModelScope.launch {
-            combine(agentRuntime.userInteractionRequest, agentRuntime.isPaused) { request, paused ->
-                request?.takeIf {
-                    paused && it.conversationId == conversationId &&
-                        it.state == UserInteractionState.PENDING && it.kind != UserInteractionKind.PERMISSION
-                }?.reason.orEmpty()
-            }.collect { _manualTakeoverReason.value = it }
+            agentRuntime.userInteractionRequest.collect { request ->
+                _userInteraction.value = request?.takeIf { it.conversationId == conversationId }
+            }
         }
         viewModelScope.launch {
             combine(

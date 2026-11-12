@@ -28,7 +28,7 @@ Tool summaries and parameter descriptions are concise request documentation; the
     "skill_source": "Inspect or manage a versioned skill source using the declared operations and revision preconditions.",
     "update_memory": "Save or revise user-authorized memory; keep source scope and existing restrictions.",
     "verify_skill": "Validate a reusable skill version and return actual validation findings; validation does not establish a real device business outcome.",
-    "report_result": "Deliver useful requested findings while continuing. Preserve scope and unknowns; send before a human handoff. Already visible text must not be repeated in the final answer. Does not end the task."
+    "report_result": "Deliver useful partial findings before substantial remaining work or a human handoff. Preserve scope and unknowns. When the full answer is ready, use a completion tool directly."
   },
   "helpOnlyParameterTools": [
     "automation",
@@ -63,10 +63,14 @@ Tool summaries and parameter descriptions are concise request documentation; the
     "done"
   ],
   "parameterDescriptions": {
+    "android_act": {
+      "effect_key": "Only for a persistent effect being committed; omit for opening apps or other navigation. Preserve the same key across recovery of that effect."
+    },
     "screen_act": {
-      "actions[].op": "Screen operation. visit opens, captures and returns with BACK. collect captures successive list views. swipe flicks with inertia; drag moves precisely and rests before release. For a wheel, make one short adjacent-row drag with repeat=1 and inspect the resulting value before another action. Calibrate direction and step size; reduce travel after overshooting. Policy decision boundaries end drag/swipe/path groups before further actions. Observe all final values before saving. Gesture receipt coordinates labeled physical_pixels are device pixels, not normalized input coordinates.",
+      "effect_key": "Only for one persistent commit after its prepared values are verified; omit for navigation, focus and reversible input batches. Preserve the same key across recovery of that commit.",
+      "actions[].op": "Screen operation. Prefer collect for consecutive views when further movement needs no new decision. scroll navigates one view. visit opens, captures and returns with BACK. swipe flicks with inertia; drag moves precisely. Follow batch_contract for calibration, correction and decision boundaries. Receipts labeled physical_pixels use device pixels.",
       "actions[].ms": "Pause for op=wait, defaulting to policy default_wait_ms.",
-      "wait_for_frame_ms": "Optional extra pause before the final frame, which already waits for rendering to settle.",
+      "wait_for_frame_ms": "Extra pause for a known slow transition. Omit for routine rendering, which already settles before the final frame.",
       "screen_evidence": "Optional record deltas per collection_contract; a rejection never blocks the call.",
       "screen_evidence[].assessment": "Optional interpretation, separate from observed values.",
       "screen_evidence[].fields": "Field name to {value, source_ref, region?}.",

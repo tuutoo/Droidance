@@ -15,6 +15,8 @@ import android.widget.Toast
 import com.droidance.R
 import com.droidance.agent.AgentRuntime
 import com.droidance.core.agent.AgentState
+import com.droidance.core.agent.UserInteractionKind
+import com.droidance.core.agent.UserInteractionState
 import com.droidance.core.agent.device.ExecutionContextStore
 import com.droidance.core.agent.device.ExecutionSpace
 import com.droidance.agent.device.VirtualSpaceManager
@@ -222,8 +224,16 @@ class AgentStatusOverlay @Inject constructor(
     /** An empty execution display has nothing to show; the task's progress lives in Droidance. */
     private fun handleRuntimeIslandAction() {
         appScope.launch(Dispatchers.IO) {
-            if (virtualSpaceManager.inspectDisplayContent() == com.droidance.core.device.agent.device.VirtualDisplayContentState.CONTENT_PRESENT) openVirtualSpaceViewer()
-            else openApplication()
+            val request = agentRuntime.userInteractionRequest.value
+            if (request?.kind == UserInteractionKind.HIGH_RISK_CONFIRMATION &&
+                request.state == UserInteractionState.PENDING
+            ) {
+                openApplication()
+            } else if (virtualSpaceManager.inspectDisplayContent() == com.droidance.core.device.agent.device.VirtualDisplayContentState.CONTENT_PRESENT) {
+                openVirtualSpaceViewer()
+            } else {
+                openApplication()
+            }
         }
     }
 

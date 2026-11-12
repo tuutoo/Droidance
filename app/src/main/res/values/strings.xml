@@ -45,6 +45,14 @@
     <string name="manual_takeover_resumed_action">Resumed, observing the current screen</string>
     <string name="chat_takeover_title">Handle the current screen</string>
     <string name="chat_takeover_handle">Handle now</string>
+    <string name="tool_confirmation_title">Allow %1$s to run?</string>
+    <string name="tool_confirmation_reason">This action may affect device state or access sensitive data.</string>
+    <string name="tool_confirmation_allow_once">Allow once</string>
+    <string name="tool_confirmation_deny">Deny</string>
+    <string name="tool_confirmation_denied">Tool call denied</string>
+    <string name="tool_confirmation_expired">Tool confirmation expired</string>
+    <string name="tool_confirmation_waiting">Waiting for tool confirmation</string>
+    <string name="tool_confirmation_notification_text">Open the conversation to review the tool request.</string>
     <string name="chat_takeover_resolved">Handled on device. The task has resumed.</string>
     <string name="chat_takeover_closed">This takeover request has ended</string>
     <string name="chat_permission_title">Permission Authorization Required</string>
@@ -147,7 +155,10 @@
     <string name="update_status_latest">You\'re up to date</string>
     <string name="update_status_available">New version available: %1$s</string>
     <string name="update_status_error_network">Network connection failed. Please check network and retry.</string>
-    <string name="update_status_error_rate_limited">GitHub API rate limit exceeded. Please try again later.</string>
+    <string name="update_status_error_rate_limited">GitHub is temporarily limiting requests.</string>
+    <string name="update_status_error_access_denied">GitHub denied access to the update file.</string>
+    <string name="update_status_retry_after">Try again after %1$s.</string>
+    <string name="update_status_cached">Saved update information, checked %1$s.</string>
     <string name="update_status_error_generic">Failed to check for updates</string>
     <string name="update_action_check">Check</string>
     <string name="update_action_view">View</string>
@@ -411,7 +422,7 @@
     <string name="provider_models_add">Add</string>
     <string name="provider_models_done">Done (%1$d)</string>
     <string name="provider_models_empty">No models found</string>
-    <string name="provider_models_connection_required">Enter an API address and key to fetch models.</string>
+    <string name="provider_models_connection_required">Enter an API address to fetch models.</string>
     <string name="provider_models_unsupported">This address does not provide a model list.</string>
     <string name="provider_models_fetch_failed">Could not fetch models. Try again.</string>
     <string name="provider_models_none_returned">No models were returned.</string>
@@ -549,7 +560,7 @@
     <string name="settings_limit_minutes">minutes</string>
     <string name="settings_limit_value">%1$d %2$s · Edit</string>
     <string name="automation_next_preview">Next run: %1$s (%2$s)</string>
-    <string name="settings_repository_url" translatable="false">https://github.com/YbbLab/Droidance</string>
+    <string name="settings_repository_url" translatable="false">https://github.com/ybblab/Droidance</string>
     <string name="connection_unpaired_title">Device not connected</string>
     <string name="connection_unpaired_description">Phone operations are unavailable. Pair this phone using wireless debugging to connect the device.</string>
     <string name="connection_pairing_required_title">Pairing required</string>
