@@ -12,39 +12,40 @@ import javax.inject.Singleton
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-enum class DeviceConnectionMethod { WIRELESS, ROOT }
+enum class DeviceConnectionMethod { WIRELESS, ROOT, SHIZUKU }
 
 /** Persists the chosen bootstrap transport. Device execution still uses the shell sidecar. */
 @Singleton
 class RootConnectionManager @Inject constructor(@ApplicationContext context: Context) {
     private val prefs = context.getSharedPreferences("droidance_settings", Context.MODE_PRIVATE)
     private val _method = MutableStateFlow(
-        if (prefs.getString(KEY_METHOD, null) == DeviceConnectionMethod.ROOT.name)
-            DeviceConnectionMethod.ROOT else DeviceConnectionMethod.WIRELESS
+        readMethod()
     )
     val method = _method.asStateFlow()
     private val preferenceListener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == KEY_METHOD) {
-            _method.value = if (prefs.getString(KEY_METHOD, null) == DeviceConnectionMethod.ROOT.name)
-                DeviceConnectionMethod.ROOT else DeviceConnectionMethod.WIRELESS
+            _method.value = readMethod()
         }
     }
     // app_process has no ActivityThread main handler for SharedPreferences listener delivery.
     init { if (!RuntimeProcessRole.isOwner) prefs.registerOnSharedPreferenceChangeListener(preferenceListener) }
     val currentMethod: DeviceConnectionMethod
         get() = if (RuntimeProcessRole.isOwner) {
-            if (prefs.getString(KEY_METHOD, null) == DeviceConnectionMethod.ROOT.name)
-                DeviceConnectionMethod.ROOT else DeviceConnectionMethod.WIRELESS
+            readMethod()
         } else _method.value
     private val readers = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "root-shell-reader").apply { isDaemon = true }
     }
     @Volatile var rootReady: Boolean = false
         private set
-    @Volatile private var rootCandidate = false
+    @Volatile private var candidateMethod: DeviceConnectionMethod? = null
     @Volatile private var shellIdentity = SHELL_IDENTITY
 
-    val useRoot: Boolean get() = rootReady && (rootCandidate || currentMethod == DeviceConnectionMethod.ROOT)
+    val effectiveMethod: DeviceConnectionMethod get() = candidateMethod ?: currentMethod
+    val useRoot: Boolean get() = rootReady && effectiveMethod == DeviceConnectionMethod.ROOT
+
+    private fun readMethod(): DeviceConnectionMethod = DeviceConnectionMethod.entries
+        .firstOrNull { it.name == prefs.getString(KEY_METHOD, null) } ?: DeviceConnectionMethod.WIRELESS
 
     /** Request authorization only on an explicit connect or once when restoring a saved choice. */
     @Synchronized fun authorize(): Boolean {
@@ -60,8 +61,8 @@ class RootConnectionManager @Inject constructor(@ApplicationContext context: Con
         return rootReady
     }
 
-    fun beginRootCandidate() { rootCandidate = true }
-    fun endRootCandidate() { rootCandidate = false }
+    fun beginCandidate(method: DeviceConnectionMethod) { candidateMethod = method }
+    fun endCandidate() { candidateMethod = null }
 
     fun select(method: DeviceConnectionMethod) {
         prefs.edit().putString(KEY_METHOD, method.name).apply()

@@ -47,7 +47,10 @@ class SystemSettingsNavigator @Inject constructor(
     fun hasPendingDangerousPermissions(): Boolean =
         context.packageManager
             .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
-            .requestedPermissions.orEmpty().any { permission ->
+            .requestedPermissions.orEmpty()
+            // Shizuku authorization is managed on the device connection page.
+            .filter { it != com.droidance.core.device.agent.device.ShizukuConnectionManager.PERMISSION_NAME }
+            .any { permission ->
                 val info = runCatching { context.packageManager.getPermissionInfo(permission, 0) }.getOrNull()
                 info != null &&
                     info.protection == android.content.pm.PermissionInfo.PROTECTION_DANGEROUS &&

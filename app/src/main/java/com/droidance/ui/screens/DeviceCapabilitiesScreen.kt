@@ -34,6 +34,7 @@ import com.droidance.ui.theme.Neutral0
 import com.droidance.ui.theme.Neutral300
 import com.droidance.core.device.air.AirModePairingManager
 import com.droidance.core.device.agent.device.DeviceConnectionMethod
+import com.droidance.ui.connection.connectionMethodLabel
 import com.droidance.ui.viewmodel.SettingsUiState
 
 internal data class DeviceCapabilityActions(
@@ -106,9 +107,9 @@ private fun ReadinessSection(
         SettingsCardGroup {
             SettingsNavItem(
                 title = stringResource(R.string.air_pairing_title),
-                subtitle = if (state.connectionMethod == DeviceConnectionMethod.ROOT) {
+                subtitle = if (state.connectionMethod != DeviceConnectionMethod.WIRELESS) {
                     stringResource(if (state.deviceConnected) R.string.connection_method_connected else R.string.connection_method_disconnected,
-                        stringResource(R.string.connection_method_root))
+                        stringResource(connectionMethodLabel(state.connectionMethod)))
                 } else when (state.airBridgeState) {
                     AirModePairingManager.PairingState.IDLE ->
                         when {

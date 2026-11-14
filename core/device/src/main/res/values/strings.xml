@@ -44,4 +44,6 @@
     <string name="settings_air_local_port_close_failed">Could not confirm that the debugging port is closed. Pairing and port records were kept; reconnect with Wi-Fi and try again.</string>
     <string name="settings_air_local_adb_connection_failed">Could not connect to the local debugging port. Keep USB debugging enabled and approve the system debugging authorization prompt.</string>
     <string name="settings_air_debug_port_invalid">Enter a port from 1 to 65535.</string>
+    <string name="runtime_shizuku_channel_lost_title">Shizuku control channel disconnected</string>
+    <string name="runtime_shizuku_channel_lost_text">Open Droidance to check Shizuku service and authorization, then reconnect the device.</string>
 </resources>

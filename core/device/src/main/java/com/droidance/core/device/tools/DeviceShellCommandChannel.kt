@@ -44,7 +44,8 @@ class DeviceShellCommandChannel internal constructor(
         adbShell: AdbShellExecutor,
         sidecarBridge: VirtualSpaceSidecarBridge,
         modeProvider: RuntimeModeProvider,
-        debugLogAppender: DebugLogAppender
+        debugLogAppender: DebugLogAppender,
+        connection: com.droidance.core.device.agent.device.RootConnectionManager
     ) : this(
         binderAvailable = {
             modeProvider.currentMode()?.let(sidecarBridge::isResidentBinderAlive) == true
@@ -67,13 +68,17 @@ class DeviceShellCommandChannel internal constructor(
         log = { line -> debugLogAppender.appendEvent(line) },
         shellBackend = {
             when (modeProvider.currentMode()) {
-                RuntimeMode.STANDARD -> Backend.AIR_SHELL
+                RuntimeMode.STANDARD -> when (connection.effectiveMethod) {
+                    com.droidance.core.device.agent.device.DeviceConnectionMethod.WIRELESS -> Backend.AIR_SHELL
+                    com.droidance.core.device.agent.device.DeviceConnectionMethod.ROOT -> Backend.ROOT_SHELL
+                    com.droidance.core.device.agent.device.DeviceConnectionMethod.SHIZUKU -> Backend.SHIZUKU_SHELL
+                }
                 else -> Backend.NONE
             }
         }
     )
 
-    enum class Backend { BINDER, AIR_SHELL, NONE }
+    enum class Backend { BINDER, AIR_SHELL, ROOT_SHELL, SHIZUKU_SHELL, NONE }
 
     data class Outcome(
         val backend: Backend,

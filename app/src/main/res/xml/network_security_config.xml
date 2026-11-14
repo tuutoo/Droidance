@@ -4,9 +4,6 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors><certificates src="system" /></trust-anchors>
     </base-config>
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="false">localhost</domain>
-        <domain includeSubdomains="false">127.0.0.1</domain>
-        <domain includeSubdomains="false">::1</domain>
-    </domain-config>
+    <!-- No redundant per-domain rules: Shizuku initializes another application context in its
+         helper process. Android rejects multiple application configs with domain overrides. -->
 </network-security-config>

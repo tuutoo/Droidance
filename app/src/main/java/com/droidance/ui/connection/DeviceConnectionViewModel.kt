@@ -33,6 +33,7 @@ internal class DeviceConnectionViewModel @Inject constructor(
     private val air: AirModePairingManager,
     private val capabilities: RuntimeCapabilityRegistry,
     private val root: RootConnectionManager,
+    private val shizuku: com.droidance.core.device.agent.device.ShizukuConnectionManager,
     private val bridge: VirtualSpaceSidecarBridge,
     private val settings: SystemSettingsNavigator
 ) : ViewModel() {
@@ -60,6 +61,9 @@ internal class DeviceConnectionViewModel @Inject constructor(
         val next = withContext(Dispatchers.IO) {
             runCatching {
                 val device = capabilities.refresh(force = true)
+                if (root.currentMethod == DeviceConnectionMethod.SHIZUKU) {
+                    return@runCatching shizukuConnectionStatus(shizuku.refresh(), bridge.isResidentBinderAlive())
+                }
                 if (root.currentMethod == DeviceConnectionMethod.ROOT) {
                     return@runCatching if (bridge.isResidentBinderAlive()) DeviceConnectionStatus.READY
                     else DeviceConnectionStatus.ROOT_UNAVAILABLE
@@ -94,6 +98,8 @@ internal class DeviceConnectionViewModel @Inject constructor(
         dismiss()
         when (action) {
             DeviceConnectionAction.PAIR -> onOpenPairing()
+            DeviceConnectionAction.SHIZUKU_MANAGER -> openSettings { check(shizuku.openManager()) }
+            DeviceConnectionAction.SHIZUKU_DOWNLOAD -> openSettings { check(shizuku.openDownload()) }
             DeviceConnectionAction.DEVELOPER_SETTINGS -> openSettings(settings::openDeveloperOptions)
             DeviceConnectionAction.WIRELESS_SETTINGS -> openSettings(settings::openWirelessDebuggingSettings)
             DeviceConnectionAction.WIFI_SETTINGS -> openSettings(settings::openWifiSettings)

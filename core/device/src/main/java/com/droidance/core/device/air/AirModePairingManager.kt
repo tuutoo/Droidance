@@ -254,7 +254,7 @@ class AirModePairingManager @Inject constructor(
 
     /** A real authenticated connection per periodic job refreshes the system's key usage time. */
     suspend fun keepAlive() {
-        if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) return
+        if (rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS) return
         if (!isPreviouslyPaired || automaticReconnectSuspended) return
         val port = savedLocalPort()?.takeIf { _persistenceEnabled.value }
         if (port != null) {
@@ -447,7 +447,7 @@ class AirModePairingManager @Inject constructor(
     }
 
     fun ensureConnectedIfPaired() {
-        if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) return
+        if (rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS) return
         if (!isPreviouslyPaired || automaticReconnectSuspended) return
         if (isShellReady) {
             preparePersistenceIfNeeded()
@@ -456,7 +456,7 @@ class AirModePairingManager @Inject constructor(
 
     fun onWifiNetworkChanged(trigger: String, wifiAvailable: Boolean) {
         wifiTransportAvailable = wifiAvailable
-        if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) return
+        if (rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS) return
         debugLogAppender.appendEvent(
             "AIR wifi_transport_changed(trigger=${trigger.take(40)}, available=$wifiAvailable, " +
                 "state=${_state.value.name.lowercase()}, trust=${_pairingTrustState.value.name.lowercase()})"
@@ -755,7 +755,7 @@ class AirModePairingManager @Inject constructor(
     }
 
     fun notifyPairingRequiredIfNeeded(): Boolean {
-        if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) return false
+        if (rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS) return false
         if (!isPairingRequired) return false
         runCatching { notificationController.showPairingRequired() }
         return true

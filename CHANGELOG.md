@@ -8,6 +8,14 @@ Record a notable change in `Unreleased` within the same pull request that implem
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-14
+
+- Add Shizuku as a connection option in setup and settings.
+- Show Shizuku service and authorization status, with device connection recovery.
+- Keep existing device control available when Shizuku stops, while the resident connection remains active.
+
+Install and start Shizuku before connecting, and restart it after rebooting your phone. If Shizuku is started with root, use Droidance's Root connection.
+
 ## [0.2.3] - 2026-11-12
 
 Refine multi-step screen actions, list collection, and date/time wheel controls.

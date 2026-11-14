@@ -96,6 +96,9 @@ fun SettingsScreen(
                     SettingsHomeDivider()
                     SettingsNavItem(
                         title = stringResource(R.string.settings_device_execution),
+                        subtitle = stringResource(if (overview.deviceConnected) R.string.connection_method_connected
+                            else R.string.connection_method_disconnected,
+                            stringResource(com.droidance.ui.connection.connectionMethodLabel(overview.connectionMethod))),
                         icon = DroidanceIcons.Bolt,
                         onClick = onNavigateToDeviceExecution
                     )

@@ -2,6 +2,9 @@
 
 # ADB shell app_process 通过完整类名启动后台虚拟空间 sidecar，发布构建不能混淆入口类。
 -keep class com.droidance.core.device.agent.device.VirtualSpaceSidecarMain { *; }
+-keep class com.droidance.core.device.agent.device.ShizukuShellService { *; }
+-keep class com.droidance.core.device.agent.device.IShizukuShellService$Stub { *; }
+-keep class com.droidance.core.device.agent.device.IShizukuShellService$Stub$Proxy { *; }
 -keep class com.droidance.core.device.agent.device.VirtualSpaceSidecarService { *; }
 -keep class com.droidance.core.device.agent.device.IVirtualSpaceSidecar { *; }
 -keep class com.droidance.core.device.agent.device.IVirtualSpaceSidecar$Stub { *; }

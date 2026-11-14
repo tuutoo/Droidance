@@ -639,7 +639,7 @@ data class SettingsUiState(
                 airPreviouslyPaired && !airPairingRequired && airResidentChannelAvailable)
 
     val deviceConnected: Boolean
-        get() = if (connectionMethod == DeviceConnectionMethod.ROOT) airResidentChannelAvailable else airDeviceConnected
+        get() = if (connectionMethod != DeviceConnectionMethod.WIRELESS) airResidentChannelAvailable else airDeviceConnected
 }
 
 private const val AIR_RESIDENT_CHANNEL_REFRESH_MS = 2_000L

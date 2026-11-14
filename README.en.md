@@ -42,7 +42,7 @@ Droidance **needs only a multimodal model API key**. It does not require root, a
 
 ### 🔑 One key to start
 
-No root, computer, cable or extra hardware. Install the app, pair wireless debugging and enter a multimodal model API key. On a rooted device, you can also choose a Root connection.
+No root, computer, cable or extra hardware. Install the app, pair wireless debugging and enter a multimodal model API key. On a rooted device, you can also choose a Root connection. If Shizuku is already running, you can choose Shizuku and grant access.
 
 </td>
 <td width="33%" valign="top">
@@ -77,7 +77,7 @@ No XML hierarchy dumps and no accessibility service. Custom-drawn controls and W
 | Step | Action |
 | :---: | :--- |
 | **1** | Download and install the latest APK from [Releases](https://github.com/YbbLab/Droidance/releases/latest) |
-| **2** | Under **Connect device**, choose wireless debugging, follow the guide to enable **Developer options → Wireless debugging**, and enter the pairing code. On a rooted device, you can instead choose Root and grant access. **No computer is needed.** |
+| **2** | Under **Connect device**, choose wireless debugging, follow the guide to enable **Developer options → Wireless debugging**, and enter the pairing code. On a rooted device, you can instead choose Root and grant access. If Shizuku is running, select Shizuku and allow authorization. **No computer is needed.** |
 | **3** | Add a provider endpoint, API key and model, then describe your task |
 
 That's it. Tasks run in the background, and the runtime island at the top of the screen lets you check progress, pause or take control.
@@ -196,6 +196,7 @@ Agent rules and policies live in Markdown configuration (`app/src/main/assets/ru
 | --- | --- |
 | Wireless debugging pairing | Start the shell-identity device control process without Root |
 | Root access (optional) | Start the same shell-identity device control process without wireless debugging |
+| Shizuku authorization (optional) | Start the same device control process through a running Shizuku service |
 | Calendar, contacts, SMS, call log | System capabilities the agent can use for a task after you grant them |
 | Notification access | Read notifications for tasks and automation |
 | Droidance keyboard | Type text on the virtual display |
@@ -215,6 +216,7 @@ Runtime permissions can be revoked in system settings at any time. After wireles
 ## 📱 Compatibility and known limitations
 
 - Wireless pairing and reconnecting after a phone restart require Wi‑Fi. Some systems turn wireless debugging off after network changes, restarts or long idle periods, and it must be enabled again when needed.
+- Install Shizuku separately and start it through ADB or wireless debugging; start it again after a phone reboot. For root-started Shizuku, choose Droidance’s Root connection. A stopped Shizuku service does not interrupt tasks while the existing device channel remains available.
 - Root connection has been tested on a physical device with Android 16 and SukiSU; behavior may differ with other Root managers and devices.
 - Some vendor systems restrict background work. Allow Droidance to run in the background and turn off battery optimization for it.
 - Some apps detect developer options or wireless debugging and may refuse to run or limit features.

@@ -305,14 +305,22 @@ class AirModeNotificationController @Inject constructor(
         post("pairing_required", notification)
     }
 
-    fun showRuntimeChannelLost(root: Boolean) {
+    fun showRuntimeChannelLost(method: com.droidance.core.device.agent.device.DeviceConnectionMethod) {
         ensureChannel()
         val intent = (context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?: Intent().setClassName(context.packageName, "com.droidance.MainActivity"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val notification = builder(
-            if (root) R.string.runtime_root_channel_lost_title else R.string.runtime_air_channel_lost_title,
-            if (root) R.string.runtime_root_channel_lost_text else R.string.runtime_air_channel_lost_text
+            when (method) {
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.ROOT -> R.string.runtime_root_channel_lost_title
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.SHIZUKU -> R.string.runtime_shizuku_channel_lost_title
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.WIRELESS -> R.string.runtime_air_channel_lost_title
+            },
+            when (method) {
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.ROOT -> R.string.runtime_root_channel_lost_text
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.SHIZUKU -> R.string.runtime_shizuku_channel_lost_text
+                com.droidance.core.device.agent.device.DeviceConnectionMethod.WIRELESS -> R.string.runtime_air_channel_lost_text
+            }
         ).setAutoCancel(true)
             .setContentIntent(PendingIntent.getActivity(
                 context, 2, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE

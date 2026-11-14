@@ -69,6 +69,24 @@ private data class ConnectionPresentation(
 )
 
 private fun presentation(status: DeviceConnectionStatus): ConnectionPresentation = when (status) {
+    DeviceConnectionStatus.SHIZUKU_NOT_INSTALLED -> ConnectionPresentation(
+        R.string.connection_unpaired_title, R.string.connection_shizuku_install_hint,
+        R.string.connection_shizuku_install, DroidanceIcons.Link)
+    DeviceConnectionStatus.SHIZUKU_STOPPED -> ConnectionPresentation(
+        R.string.connection_shizuku_stopped_title, R.string.connection_shizuku_start_hint,
+        R.string.connection_shizuku_open, DroidanceIcons.Link)
+    DeviceConnectionStatus.SHIZUKU_AUTH_REQUIRED -> ConnectionPresentation(
+        R.string.connection_shizuku_auth_title, R.string.connection_shizuku_denied,
+        R.string.air_pairing_title, DroidanceIcons.Link)
+    DeviceConnectionStatus.SHIZUKU_UPDATE_REQUIRED -> ConnectionPresentation(
+        R.string.connection_shizuku_unsupported_title, R.string.connection_shizuku_update_required,
+        R.string.connection_shizuku_open, DroidanceIcons.Link)
+    DeviceConnectionStatus.SHIZUKU_SHELL_REQUIRED -> ConnectionPresentation(
+        R.string.connection_shizuku_unsupported_title, R.string.connection_shizuku_shell_required,
+        R.string.air_pairing_title, DroidanceIcons.Link)
+    DeviceConnectionStatus.SHIZUKU_UNAVAILABLE -> ConnectionPresentation(
+        R.string.connection_shizuku_unavailable_title, R.string.connection_shizuku_start_failed,
+        R.string.air_pairing_title, DroidanceIcons.Link)
     DeviceConnectionStatus.ROOT_UNAVAILABLE -> ConnectionPresentation(
         R.string.connection_root_unavailable_title, R.string.connection_root_unavailable_description,
         R.string.air_pairing_title, DroidanceIcons.Link)

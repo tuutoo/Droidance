@@ -143,8 +143,10 @@ class OnboardingViewModel @Inject constructor(
     }
 
     private fun deviceConnected(): Boolean =
-        if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) sidecarBridge.isResidentBinderAlive()
-        else airModePairingManager.isConnected
+        if (rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS) sidecarBridge.isResidentBinderAlive()
+        else airModePairingManager.isConnected ||
+            (airModePairingManager.isPreviouslyPaired && !airModePairingManager.isPairingRequired &&
+                sidecarBridge.isResidentBinderAlive())
 
     // ====== 完成引导，写入 DEVICE.md ======
 

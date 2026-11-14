@@ -5,7 +5,7 @@ package com.droidance.ui.connection
 
 import com.droidance.core.device.air.AirModePairingManager.PairingState
 
-internal enum class DeviceConnectionAction { PAIR, DEVELOPER_SETTINGS, WIRELESS_SETTINGS, WIFI_SETTINGS, RETRY, WAIT }
+internal enum class DeviceConnectionAction { PAIR, DEVELOPER_SETTINGS, WIRELESS_SETTINGS, WIFI_SETTINGS, RETRY, SHIZUKU_MANAGER, SHIZUKU_DOWNLOAD, WAIT }
 
 internal enum class DeviceConnectionStatus(
     val action: DeviceConnectionAction = DeviceConnectionAction.WAIT,
@@ -17,12 +17,31 @@ internal enum class DeviceConnectionStatus(
     PAIRING(DeviceConnectionAction.PAIR),
     UNPAIRED(DeviceConnectionAction.PAIR, true),
     ROOT_UNAVAILABLE(DeviceConnectionAction.PAIR, true),
+    SHIZUKU_NOT_INSTALLED(DeviceConnectionAction.SHIZUKU_DOWNLOAD, true),
+    SHIZUKU_STOPPED(DeviceConnectionAction.SHIZUKU_MANAGER, true),
+    SHIZUKU_AUTH_REQUIRED(DeviceConnectionAction.PAIR, true),
+    SHIZUKU_UPDATE_REQUIRED(DeviceConnectionAction.SHIZUKU_MANAGER, true),
+    SHIZUKU_SHELL_REQUIRED(DeviceConnectionAction.PAIR, true),
+    SHIZUKU_UNAVAILABLE(DeviceConnectionAction.PAIR, true),
     PAIRING_REQUIRED(DeviceConnectionAction.PAIR, true),
     WIFI_UNAVAILABLE(DeviceConnectionAction.WIFI_SETTINGS, true),
     USB_DISABLED(DeviceConnectionAction.DEVELOPER_SETTINGS, true),
     WIRELESS_DISABLED(DeviceConnectionAction.WIRELESS_SETTINGS, true),
     LOCAL_UNAVAILABLE(DeviceConnectionAction.RETRY, true),
     UNAVAILABLE(DeviceConnectionAction.RETRY, true)
+}
+
+internal fun shizukuConnectionStatus(
+    service: com.droidance.core.device.agent.device.ShizukuConnectionState,
+    residentAvailable: Boolean
+): DeviceConnectionStatus = when {
+    residentAvailable -> DeviceConnectionStatus.READY
+    !service.installed && !service.running -> DeviceConnectionStatus.SHIZUKU_NOT_INSTALLED
+    !service.running -> DeviceConnectionStatus.SHIZUKU_STOPPED
+    !service.supportedVersion -> DeviceConnectionStatus.SHIZUKU_UPDATE_REQUIRED
+    !service.shellIdentity -> DeviceConnectionStatus.SHIZUKU_SHELL_REQUIRED
+    !service.authorized -> DeviceConnectionStatus.SHIZUKU_AUTH_REQUIRED
+    else -> DeviceConnectionStatus.SHIZUKU_UNAVAILABLE
 }
 
 internal data class DeviceConnectionSnapshot(

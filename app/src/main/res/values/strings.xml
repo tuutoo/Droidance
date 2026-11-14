@@ -133,7 +133,7 @@
     <string name="connection_switch_task_running">Wait for the current task to finish before switching connections.</string>
     <string name="connection_root_unavailable_title">Root connection unavailable</string>
     <string name="connection_root_unavailable_description">Check Root access and reconnect the device.</string>
-    <string name="onboarding_setup_device_desc">Choose wireless debugging or Root to connect.</string>
+    <string name="onboarding_setup_device_desc">Choose wireless debugging, Root, or Shizuku</string>
     <string name="onboarding_setup_device_root_ready">Root connection is ready</string>
     <string name="settings_ai_models">Models</string>
     <string name="settings_device_execution">Execution</string>
@@ -562,7 +562,7 @@
     <string name="automation_next_preview">Next run: %1$s (%2$s)</string>
     <string name="settings_repository_url" translatable="false">https://github.com/ybblab/Droidance</string>
     <string name="connection_unpaired_title">Device not connected</string>
-    <string name="connection_unpaired_description">Phone operations are unavailable. Pair this phone using wireless debugging to connect the device.</string>
+    <string name="connection_unpaired_description">Choose wireless debugging, Root, or Shizuku to connect this device.</string>
     <string name="connection_pairing_required_title">Pairing required</string>
     <string name="connection_pairing_required_description">The previous pairing authorization is no longer valid. Pair again to restore the device connection.</string>
     <string name="connection_wifi_title">Wi-Fi not connected</string>
@@ -840,4 +840,32 @@
     <string name="history_loading">Loading history</string>
     <string name="history_unavailable">History is temporarily unavailable</string>
     <string name="history_cached_unavailable">Showing saved history. Sync is temporarily unavailable.</string>
+    <string name="connection_method_shizuku">Shizuku</string>
+    <string name="connection_method_shizuku_desc">Use Shizuku authorization</string>
+    <string name="connection_task_running">Task in progress</string>
+    <string name="connection_shizuku_service">Service status</string>
+    <string name="connection_shizuku_permission">Authorization</string>
+    <string name="connection_shizuku_not_installed">Not installed</string>
+    <string name="connection_shizuku_not_running">Not running</string>
+    <string name="connection_shizuku_running">Running</string>
+    <string name="connection_shizuku_unknown">Not confirmed</string>
+    <string name="connection_shizuku_granted">Allowed</string>
+    <string name="connection_shizuku_not_allowed">Not allowed</string>
+    <string name="connection_shizuku_pending">Awaiting authorization</string>
+    <string name="connection_shizuku_open">Open Shizuku</string>
+    <string name="connection_shizuku_install">Install Shizuku</string>
+    <string name="connection_shizuku_check">Check authorization</string>
+    <string name="connection_shizuku_authorize">Authorize and connect</string>
+    <string name="connection_shizuku_install_hint">Install and start Shizuku, then return to continue.</string>
+    <string name="connection_shizuku_start_hint">Start Shizuku and return. The connection will be checked automatically.</string>
+    <string name="connection_shizuku_resident_available">The device connection is still available. Start Shizuku before establishing a new connection.</string>
+    <string name="connection_shizuku_update_required">Update Shizuku before connecting.</string>
+    <string name="connection_shizuku_shell_required">Start Shizuku through wireless debugging, or choose the Root connection on a rooted device.</string>
+    <string name="connection_shizuku_denied">Shizuku authorization was not allowed. Check Droidance access in Shizuku.</string>
+    <string name="connection_shizuku_start_failed">Shizuku is authorized, but the device connection could not be established. Please retry.</string>
+    <string name="connection_shizuku_stopped_title">Shizuku is not running</string>
+    <string name="connection_shizuku_auth_title">Shizuku authorization required</string>
+    <string name="connection_shizuku_unavailable_title">Shizuku device connection interrupted</string>
+    <string name="connection_shizuku_unsupported_title">Shizuku is unavailable</string>
+    <string name="onboarding_setup_device_shizuku_ready">Shizuku connected</string>
 </resources>

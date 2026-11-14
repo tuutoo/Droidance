@@ -77,3 +77,8 @@ license inventory. Current dependencies are declared in the Gradle build files;
 native source and binary identities are recorded under third_party/libadb/.
 Full bundled license texts are retained under app/src/main/assets/licenses/.
 Historical release obligations remain with each release.
+
+Shizuku API and provider (13.1.5)
+- Source: https://github.com/RikkaApps/Shizuku-API
+- License: MIT; copyright 2021 RikkaW.
+- Bundled license: app/src/main/assets/licenses/shizuku-api-MIT.txt

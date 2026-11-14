@@ -44,6 +44,7 @@ class RuntimeCapabilityRegistry @Inject constructor(
     private val modelClient: com.droidance.core.model.llm.ModelClient,
     private val airModePairingManager: AirModePairingManager,
     private val rootConnection: RootConnectionManager,
+    private val shizuku: com.droidance.core.device.agent.device.ShizukuConnectionManager,
     private val channelNotifications: com.droidance.core.device.air.AirModeNotificationController,
     private val virtualSpaceSidecarBridge: VirtualSpaceSidecarBridge,
     private val ruleConfigManager: RuleConfigManager,
@@ -93,6 +94,11 @@ class RuntimeCapabilityRegistry @Inject constructor(
                 if (rootConnection.authorize()) ensureResidentChannel()
             }
         }
+        if (!com.droidance.core.device.agent.device.RuntimeProcessRole.isOwner) appScope.launch(Dispatchers.IO) {
+            shizuku.state.collect { state ->
+                if (rootConnection.currentMethod == DeviceConnectionMethod.SHIZUKU && state.ready) ensureResidentChannel()
+            }
+        }
         appScope.launch(Dispatchers.IO) {
             com.droidance.core.device.agent.device.SidecarBinderRegistry.deaths.collect {
                 debugLogManager.appendPersistentEvent("air-pairing", "resident sidecar Binder died; recovering the device connection")
@@ -117,6 +123,7 @@ class RuntimeCapabilityRegistry @Inject constructor(
             var previouslyReady = false
             while (true) {
                 runCatching {
+                    shizuku.refresh()
                     airModePairingManager.ensureConnectedIfPaired()
                     if (!virtualSpaceSidecarBridge.isResidentBinderAlive()) recoverResidentChannel()
                     val current = refresh(force = true)
@@ -136,7 +143,7 @@ class RuntimeCapabilityRegistry @Inject constructor(
                     if (modeChanged || ready) {
                         channelNotifications.cancelRuntimeChannelLost()
                     } else if (lost) {
-                        channelNotifications.showRuntimeChannelLost(rootConnection.currentMethod == DeviceConnectionMethod.ROOT)
+                        channelNotifications.showRuntimeChannelLost(rootConnection.currentMethod)
                     }
                 }.onFailure { debugLogManager.appendEvent("channel availability check failed: ${it.javaClass.simpleName}") }
                 delay(15_000)
@@ -165,6 +172,10 @@ class RuntimeCapabilityRegistry @Inject constructor(
     }
 
     private fun recoverResidentChannel() {
+        if (rootConnection.currentMethod == DeviceConnectionMethod.SHIZUKU) {
+            if (shizuku.refresh().ready) ensureResidentChannel()
+            return
+        }
         if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) {
             if (rootConnection.rootReady) ensureResidentChannel()
             return
@@ -180,8 +191,11 @@ class RuntimeCapabilityRegistry @Inject constructor(
         appScope.launch(Dispatchers.IO) {
             if (rootConnection.currentMethod == DeviceConnectionMethod.ROOT) {
                 if (!rootConnection.rootReady) return@launch
+            } else if (rootConnection.currentMethod == DeviceConnectionMethod.SHIZUKU) {
+                if (!shizuku.refresh().ready) return@launch
             } else if (!airModePairingManager.shouldMaintainResidentChannel || !airModePairingManager.isShellReady) return@launch
-            val mode = runCatching { currentStrategy().selection.effectiveMode }.getOrNull() ?: return@launch
+            if (requestedMode()?.let { it != RuntimeMode.STANDARD } == true) return@launch
+            val mode = RuntimeMode.STANDARD
             val metrics = android.content.res.Resources.getSystem().displayMetrics
             val ok = runCatching {
                 virtualSpaceSidecarBridge.ensureResidentChannel(
@@ -309,7 +323,11 @@ class RuntimeCapabilityRegistry @Inject constructor(
 
     private fun couldBecomeReady(strategy: DeviceExecutionStrategy): Boolean {
         return when (strategy.selection.requestedMode ?: RuntimeMode.STANDARD) {
-            RuntimeMode.STANDARD -> rootConnection.rootReady || airModePairingManager.isPreviouslyPaired ||
+            RuntimeMode.STANDARD -> (when (rootConnection.currentMethod) {
+                DeviceConnectionMethod.ROOT -> rootConnection.rootReady
+                DeviceConnectionMethod.SHIZUKU -> shizuku.state.value.ready
+                DeviceConnectionMethod.WIRELESS -> airModePairingManager.isPreviouslyPaired
+            }) ||
                 snapshot.adbBridgeAvailable || snapshot.virtualSpaceBridgeAvailable
             else -> false
         }

@@ -294,7 +294,8 @@ private fun PermissionChecklist(
                 icon = DroidanceIcons.Link,
                 name = stringResource(R.string.onboarding_setup_air),
                 desc = stringResource(
-                    if (scan.deviceReady && scan.connectionMethod == DeviceConnectionMethod.ROOT) R.string.onboarding_setup_device_root_ready
+                    if (scan.deviceReady && scan.connectionMethod == DeviceConnectionMethod.SHIZUKU) R.string.onboarding_setup_device_shizuku_ready
+                    else if (scan.deviceReady && scan.connectionMethod == DeviceConnectionMethod.ROOT) R.string.onboarding_setup_device_root_ready
                     else if (scan.deviceReady) R.string.onboarding_setup_air_ready
                     else R.string.onboarding_setup_device_desc
                 ),

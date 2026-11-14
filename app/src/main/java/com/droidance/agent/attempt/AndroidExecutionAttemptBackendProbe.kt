@@ -70,7 +70,7 @@ class AndroidExecutionAttemptBackendProbe @Inject constructor(
             unavailableDiagnosticCode = diagnostic ?: when {
                 !virtualSpaceManager.isDeviceSupported() -> AttemptDiagnosticCode.VIRTUAL_DISPLAY_UNSUPPORTED
                 route.runtimeMode != RuntimeMode.STANDARD || route.executionSpace != ExecutionSpace.VIRTUAL_SPACE -> AttemptDiagnosticCode.BACKEND_UNAVAILABLE
-                rootConnection.currentMethod == DeviceConnectionMethod.ROOT -> AttemptDiagnosticCode.BACKEND_UNAVAILABLE
+                rootConnection.currentMethod != DeviceConnectionMethod.WIRELESS -> AttemptDiagnosticCode.BACKEND_UNAVAILABLE
                 airModePairingManager.isPairingRequired || !airModePairingManager.isPreviouslyPaired -> AttemptDiagnosticCode.AIR_PAIRING_REQUIRED
                 else -> AttemptDiagnosticCode.AIR_CHANNEL_RECOVERY_REQUIRED
             })

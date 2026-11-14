@@ -133,7 +133,7 @@
     <string name="connection_switch_task_running">请等待当前任务结束后再切换连接。</string>
     <string name="connection_root_unavailable_title">Root 连接不可用</string>
     <string name="connection_root_unavailable_description">请检查 Root 授权并重新连接设备。</string>
-    <string name="onboarding_setup_device_desc">选择无线调试或 Root 连接</string>
+    <string name="onboarding_setup_device_desc">选择无线调试、Root 或 Shizuku 连接</string>
     <string name="onboarding_setup_device_root_ready">Root 通道已连接</string>
     <string name="settings_ai_models">模型</string>
     <string name="settings_device_execution">执行</string>
@@ -562,7 +562,7 @@
     <string name="automation_next_preview">下次执行：%1$s（%2$s）</string>
     <string name="settings_repository_url" translatable="false">https://github.com/ybblab/Droidance</string>
     <string name="connection_unpaired_title">设备尚未连接</string>
-    <string name="connection_unpaired_description">目前无法操作手机。请通过无线调试配对这台手机，以建立设备连接。</string>
+    <string name="connection_unpaired_description">请选择无线调试、Root 或 Shizuku，建立设备连接。</string>
     <string name="connection_pairing_required_title">需要重新配对</string>
     <string name="connection_pairing_required_description">原有配对授权已失效。请重新配对以恢复设备连接。</string>
     <string name="connection_wifi_title">Wi-Fi 未连接</string>
@@ -837,4 +837,32 @@
     <string name="history_loading">正在读取历史</string>
     <string name="history_unavailable">暂时无法读取历史</string>
     <string name="history_cached_unavailable">暂时无法同步，已显示本地历史</string>
+    <string name="connection_method_shizuku">Shizuku</string>
+    <string name="connection_method_shizuku_desc">使用 Shizuku 授权</string>
+    <string name="connection_task_running">任务执行中</string>
+    <string name="connection_shizuku_service">服务状态</string>
+    <string name="connection_shizuku_permission">授权状态</string>
+    <string name="connection_shizuku_not_installed">未安装</string>
+    <string name="connection_shizuku_not_running">未启动</string>
+    <string name="connection_shizuku_running">运行中</string>
+    <string name="connection_shizuku_unknown">待确认</string>
+    <string name="connection_shizuku_granted">已允许</string>
+    <string name="connection_shizuku_not_allowed">未允许</string>
+    <string name="connection_shizuku_pending">待授权</string>
+    <string name="connection_shizuku_open">打开 Shizuku</string>
+    <string name="connection_shizuku_install">安装 Shizuku</string>
+    <string name="connection_shizuku_check">检查授权</string>
+    <string name="connection_shizuku_authorize">授权并连接</string>
+    <string name="connection_shizuku_install_hint">安装并启动 Shizuku 后，返回继续连接。</string>
+    <string name="connection_shizuku_start_hint">启动 Shizuku 后返回，将自动检查连接。</string>
+    <string name="connection_shizuku_resident_available">当前设备连接仍可用；再次建立连接前请启动 Shizuku。</string>
+    <string name="connection_shizuku_update_required">请更新 Shizuku 后再连接。</string>
+    <string name="connection_shizuku_shell_required">请通过无线调试启动 Shizuku；已获取 Root 权限的设备也可选择 Root 连接。</string>
+    <string name="connection_shizuku_denied">未获得 Shizuku 授权，请在 Shizuku 中检查 Droidance 授权。</string>
+    <string name="connection_shizuku_start_failed">已获得 Shizuku 授权，但设备连接未建立，请重试。</string>
+    <string name="connection_shizuku_stopped_title">Shizuku 尚未启动</string>
+    <string name="connection_shizuku_auth_title">需要 Shizuku 授权</string>
+    <string name="connection_shizuku_unavailable_title">Shizuku 设备连接中断</string>
+    <string name="connection_shizuku_unsupported_title">Shizuku 暂不可用</string>
+    <string name="onboarding_setup_device_shizuku_ready">Shizuku 通道已连接</string>
 </resources>

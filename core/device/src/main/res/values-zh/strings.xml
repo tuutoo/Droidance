@@ -44,4 +44,6 @@
     <string name="settings_air_local_port_close_failed">无法确认调试端口已关闭，已保留配对和端口记录；请连接 Wi-Fi 后重试。</string>
     <string name="settings_air_local_adb_connection_failed">无法连接本机调试端口。请确认 USB 调试已开启，并允许系统弹出的调试授权。</string>
     <string name="settings_air_debug_port_invalid">请输入 1 到 65535 之间的端口。</string>
+    <string name="runtime_shizuku_channel_lost_title">Shizuku 控制通道已断开</string>
+    <string name="runtime_shizuku_channel_lost_text">请打开 Droidance，检查 Shizuku 服务和授权后重新连接设备。</string>
 </resources>

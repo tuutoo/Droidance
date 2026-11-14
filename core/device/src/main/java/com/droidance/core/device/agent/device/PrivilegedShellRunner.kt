@@ -19,21 +19,28 @@ enum class ShellIdentity {
 @Singleton
 class PrivilegedShellRunner @Inject constructor(
     private val airModePairingManager: AirModePairingManager,
-    private val root: RootConnectionManager
+    private val root: RootConnectionManager,
+    private val shizuku: ShizukuConnectionManager
 ) {
     fun isAvailable(identity: ShellIdentity = ShellIdentity.SHELL): Boolean =
         if (RuntimeProcessRole.isOwner) true else
         when (identity) {
             ShellIdentity.DEFAULT,
-            ShellIdentity.SHELL -> if (root.useRoot) true else if (root.currentMethod == DeviceConnectionMethod.ROOT) false else isAdbShellReady()
+            ShellIdentity.SHELL -> when (root.effectiveMethod) {
+                DeviceConnectionMethod.ROOT -> root.useRoot
+                DeviceConnectionMethod.SHIZUKU -> shizuku.refresh().ready
+                DeviceConnectionMethod.WIRELESS -> isAdbShellReady()
+            }
         }
 
     fun shell(command: String, timeoutMs: Long, service: String = "shell"): String =
-        if (root.useRoot) root.shell(command, timeoutMs)
-        else if (root.currentMethod == DeviceConnectionMethod.ROOT) "[ROOT_DISCONNECTED]"
-        else airModePairingManager.shell(command, timeoutMs, service)
+        when (root.effectiveMethod) {
+            DeviceConnectionMethod.ROOT -> root.shell(command, timeoutMs)
+            DeviceConnectionMethod.SHIZUKU -> shizuku.shell(command, timeoutMs)
+            DeviceConnectionMethod.WIRELESS -> airModePairingManager.shell(command, timeoutMs, service)
+        }
 
-    fun isFailure(output: String): Boolean = output.startsWith("[AIR_") || output.startsWith("[ROOT_")
+    fun isFailure(output: String): Boolean = output.startsWith("[AIR_") || output.startsWith("[ROOT_") || output.startsWith("[SHIZUKU_")
 
     fun currentAdbShellUid(): Int? {
         if (RuntimeProcessRole.isOwner) return ADB_SHELL_UID
@@ -53,6 +60,7 @@ class PrivilegedShellRunner @Inject constructor(
 
     fun describeShellUnavailable(): String {
         if (root.currentMethod == DeviceConnectionMethod.ROOT) return "Root authorization or shell is unavailable"
+        if (root.effectiveMethod == DeviceConnectionMethod.SHIZUKU) return "Shizuku authorization or shell is unavailable"
         val uid = currentAdbShellUid()
         return when {
             !airModePairingManager.isConnected ->
