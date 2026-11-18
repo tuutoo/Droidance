@@ -2,32 +2,96 @@
 // SPDX-License-Identifier: Apache-2.0
 package com.droidance.agent.device
 
+import android.app.Activity
 import android.content.Context
 import android.content.BroadcastReceiver
 import android.content.Intent
 import android.os.Binder
 import android.os.Bundle
 import android.os.Handler
+import android.os.HandlerThread
+import android.os.IBinder
 import android.os.Looper
+import android.util.Log
 import com.droidance.core.device.agent.device.INativeInputDriver
+import com.droidance.core.device.agent.device.IVirtualSpaceSidecar
+import com.droidance.core.device.agent.device.RuntimePlatformDriver
+import com.droidance.core.device.agent.device.SidecarBinderHandoff
+import com.droidance.core.device.agent.device.SidecarBinderReceiver
+import com.droidance.core.device.agent.device.VirtualSpaceSidecarService
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.FutureTask
 import java.util.concurrent.TimeUnit
 
 /** System input driver only. No model, task queue or application graph runs in this process. */
 class RuntimeDriverBinderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        val binder = com.droidance.core.device.agent.device.SidecarBinderHandoff.receive(context, intent) ?: return
-        val sidecar = com.droidance.core.device.agent.device.IVirtualSpaceSidecar.Stub.asInterface(binder)
+        val binder = SidecarBinderHandoff.receive(context, intent) ?: return
+        if (registration?.sidecar == binder) {
+            if (isOrderedBroadcast) resultCode = Activity.RESULT_OK
+            return
+        }
+        val sidecar = IVirtualSpaceSidecar.Stub.asInterface(binder)
         val driver = NativePlatformDriver(context.applicationContext)
+        val current = Registration(binder)
+        val death = IBinder.DeathRecipient {
+            Handler(Looper.getMainLooper()).post {
+                if (registration === current) registration = null
+                driver.close()
+            }
+        }
         try {
-            binder.linkToDeath({ driver.close() }, 0)
+            binder.linkToDeath(death, 0)
             sidecar.setPlatformDriver(driver.binder)
-        } catch (error: android.os.RemoteException) {
+            registration = current
+            if (isOrderedBroadcast) resultCode = Activity.RESULT_OK
+        } catch (_: android.os.RemoteException) {
+            runCatching { binder.unlinkToDeath(death, 0) }
             driver.close()
-            android.util.Log.w("DroidanceVSpace", "Sidecar disconnected before the input driver was registered")
+            Log.w(TAG, "Sidecar disconnected before the input driver was registered")
         } catch (error: RuntimeException) {
+            runCatching { binder.unlinkToDeath(death, 0) }
             driver.close()
-            android.util.Log.w("DroidanceVSpace", "Input driver registration failed: ${error.javaClass.simpleName}")
+            Log.w(TAG, "Input driver registration failed: ${error.javaClass.simpleName}")
+        }
+    }
+
+    private class Registration(val sidecar: IBinder)
+
+    companion object {
+        private const val TAG = "DroidanceVSpace"
+        // Read and written only by the driver process's main looper.
+        private var registration: Registration? = null
+
+        internal fun requestFromApp(context: Context, sidecar: IBinder): Boolean {
+            if (!sidecar.isBinderAlive) return false
+            val intent = Intent(context, RuntimeDriverBinderReceiver::class.java)
+                .setAction(SidecarBinderReceiver.ACTION_SIDECAR_BINDER_READY)
+                .addFlags(Intent.FLAG_RECEIVER_FOREGROUND)
+            SidecarBinderHandoff.put(intent, sidecar, 2000, VirtualSpaceSidecarService.SIDECAR_PROTOCOL_VERSION,
+                context.applicationInfo.sourceDir, context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime)
+            val completed = CountDownLatch(1)
+            var registered = false
+            val result = object : BroadcastReceiver() {
+                override fun onReceive(context: Context, intent: Intent) {
+                    registered = resultCode == Activity.RESULT_OK
+                    completed.countDown()
+                }
+            }
+            val callbacks = HandlerThread("platform-driver-recovery").apply { start() }
+            return try {
+                Log.i(TAG, "Retrying platform driver handoff from the foreground app")
+                context.sendOrderedBroadcast(intent, null, result, Handler(callbacks.looper), Activity.RESULT_CANCELED, null, null)
+                completed.await(RuntimePlatformDriver.BIND_TIMEOUT_MS, TimeUnit.MILLISECONDS) && registered
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                false
+            } catch (error: RuntimeException) {
+                Log.w(TAG, "App platform driver handoff failed: ${error.javaClass.simpleName}")
+                false
+            } finally {
+                callbacks.quitSafely()
+            }
         }
     }
 }

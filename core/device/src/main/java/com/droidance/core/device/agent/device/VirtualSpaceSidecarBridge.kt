@@ -135,13 +135,32 @@ class VirtualSpaceSidecarBridge @Inject constructor(
     fun isResidentBinderAlive(): Boolean =
         isRegisteredServiceAlive(RuntimeMode.STANDARD)
 
-    fun startAgentRuntime(packageName: String, installationId: String, storage: android.os.ParcelFileDescriptor): IAgentRuntimeOwner {
+    fun startAgentRuntime(
+        packageName: String,
+        installationId: String,
+        storage: android.os.ParcelFileDescriptor,
+        recoverPlatformDriver: (IBinder) -> Boolean,
+    ): IAgentRuntimeOwner {
         val metrics = context.resources.displayMetrics
         if (!ensureResidentChannel(metrics.widthPixels, metrics.heightPixels, metrics.densityDpi,
             RuntimeMode.STANDARD)) throw RuntimeUnavailableException()
         val service = serviceOrNull(RuntimeMode.STANDARD) ?: throw RuntimeUnavailableException()
-        val binder = service.startAgentRuntime(packageName, installationId, storage)
-            ?: throw RuntimeUnavailableException()
+        fun start() = try {
+            service.startAgentRuntime(packageName, installationId, storage) ?: throw RuntimeUnavailableException()
+        } catch (error: IllegalStateException) {
+            if (error.message == RuntimePlatformDriver.BIND_TIMEOUT) throw RuntimePlatformDriver.BindTimeoutException()
+            throw error
+        }
+
+        val binder = try {
+            start()
+        } catch (error: RuntimePlatformDriver.BindTimeoutException) {
+            if (!recoverPlatformDriver(service.asBinder())) throw RuntimeUnavailableException(error)
+            // The first start failed before consuming the snapshot or initializing the owner.
+            try { start() } catch (retry: RuntimePlatformDriver.BindTimeoutException) {
+                throw RuntimeUnavailableException(retry)
+            }
+        }
         return IAgentRuntimeOwner.Stub.asInterface(binder)
     }
 

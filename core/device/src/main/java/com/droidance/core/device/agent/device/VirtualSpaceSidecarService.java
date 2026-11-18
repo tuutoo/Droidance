@@ -42,6 +42,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -1709,6 +1710,11 @@ public final class VirtualSpaceSidecarService extends IVirtualSpaceSidecar.Stub 
             try { if (storage != null) storage.close(); } catch (Exception ignored) {}
             android.util.Log.e("DroidanceVSpace", "Runtime bootstrap failed", error);
             fail("runtime start failed: " + deepestCauseMessage(error));
+            if (error instanceof InvocationTargetException
+                    && error.getCause() instanceof RuntimePlatformDriver.BindTimeoutException) {
+                // Binder transports IllegalStateException, not its application-specific subclass.
+                throw new IllegalStateException(RuntimePlatformDriver.BIND_TIMEOUT);
+            }
             return null;
         }
     }

@@ -73,6 +73,9 @@ object RuntimeProcessHost {
             return it
         }
         check(RuntimeProcessRole.isOwner)
+        // Acquire the driver before changing storage or starting the application graph. A failed
+        // handoff can then be retried without running any of the initialization twice.
+        val driver = RuntimePlatformDriver.connect(IVirtualSpaceSidecar.Stub.asInterface(sidecar))
         val identity = java.util.UUID.fromString(installationId).toString()
         RuntimeBackup.recover(storageDirectory)
         RuntimeStorageRoot.prepare(storageDirectory, clientUid, identity)
@@ -96,7 +99,6 @@ object RuntimeProcessHost {
             application.onCreate()
             // Acquire the platform-owned session while the submitting client is awake. Drawing
             // and input subsequently use the system session directly, without calling that client.
-            val driver = RuntimePlatformDriver.connect()
             loadSystemJniLibraries(driver)
             val session = driver.windowSession
             val proxy = Class.forName("android.view.IWindowSession\$Stub")

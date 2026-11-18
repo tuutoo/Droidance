@@ -6,6 +6,7 @@ import android.content.Context
 import android.os.Bundle
 import com.droidance.agent.AgentRuntime
 import com.droidance.agent.ManualTakeoverState
+import com.droidance.agent.device.RuntimeDriverBinderReceiver
 import com.droidance.core.agent.*
 import com.droidance.core.agent.device.ExecutionSpace
 import com.droidance.core.device.agent.device.*
@@ -102,9 +103,12 @@ class RuntimeProcessClient @Inject constructor(
                 }
                 RuntimeStorageSnapshot.installationId(context)
                 val storage = RuntimeStorageSnapshot.create(context)
-                val owner = try { bridge.get().startAgentRuntime(context.packageName, RuntimeStorageSnapshot.installationId(context), storage) }
-                    catch (error: android.os.RemoteException) { throw RuntimeUnavailableException(error) }
-                    finally { storage.close() }
+                val owner = try {
+                    bridge.get().startAgentRuntime(context.packageName, RuntimeStorageSnapshot.installationId(context), storage) { sidecar ->
+                        foreground.isInForeground && RuntimeDriverBinderReceiver.requestFromApp(context, sidecar)
+                    }
+                } catch (error: android.os.RemoteException) { throw RuntimeUnavailableException(error) }
+                finally { storage.close() }
                 owner.asBinder().linkToDeath({
                     synchronized(connectionLock) { if (connection?.asBinder() == owner.asBinder()) {
                         connection = null

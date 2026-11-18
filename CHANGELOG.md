@@ -8,6 +8,10 @@ Record a notable change in `Unreleased` within the same pull request that implem
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-18
+
+- Retry the device driver connection once from the foreground app when its initial handshake times out.
+
 ## [0.3.0] - 2026-11-14
 
 - Add Shizuku as a connection option in setup and settings.
@@ -184,7 +188,8 @@ Known issue: Text replacement can intermittently retain previous text when editi
 
 First public release.
 
-[Unreleased]: https://github.com/YbbLab/Droidance/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/YbbLab/Droidance/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/YbbLab/Droidance/compare/v0.3.0...v0.3.1
 [0.1.10]: https://github.com/YbbLab/Droidance/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/YbbLab/Droidance/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/YbbLab/Droidance/compare/v0.1.7...v0.1.8
